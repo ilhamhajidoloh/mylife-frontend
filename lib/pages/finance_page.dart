@@ -590,23 +590,47 @@ class _FinancePageState extends State<FinancePage> {
                       label: 'บันทึก',
                       onPressed: () async {
                         final amt = double.tryParse(amountController.text) ?? 0;
-                        if (titleController.text.trim().isEmpty || amt <= 0) return;
-                        if (!isIndefinite && endDate == null) return;
-                        final userId = await UserSession.getUserId();
-                        if (isEdit && item?['id'] != null) {
-                          await FinanceApiService.updateRecurring(
-                            item['id'].toString(), userId, titleController.text.trim(), amt, 'ค่าใช้จ่ายประจำ',
-                            startDate, isIndefinite ? null : endDate, isIndefinite, dayOfMonth,
+                        if (titleController.text.trim().isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('กรุณากรอกชื่อรายการ')),
                           );
-                        } else {
-                          await FinanceApiService.addRecurring(
-                            userId, titleController.text.trim(), amt, 'ค่าใช้จ่ายประจำ',
-                            startDate, isIndefinite ? null : endDate, isIndefinite, dayOfMonth,
-                          );
+                          return;
                         }
-                        if (context.mounted) Navigator.pop(context);
-                        _loadRecurring();
-                        DataEventService.notifyDataChanged();
+                        if (amt <= 0) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('กรุณากรอกจำนวนเงินให้ถูกต้อง')),
+                          );
+                          return;
+                        }
+                        if (!isIndefinite && endDate == null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('กรุณาเลือกวันที่สิ้นสุด')),
+                          );
+                          return;
+                        }
+                        try {
+                          final userId = await UserSession.getUserId();
+                          if (isEdit && item?['id'] != null) {
+                            await FinanceApiService.updateRecurring(
+                              item['id'].toString(), userId, titleController.text.trim(), amt, 'ค่าใช้จ่ายประจำ',
+                              startDate, isIndefinite ? null : endDate, isIndefinite, dayOfMonth,
+                            );
+                          } else {
+                            await FinanceApiService.addRecurring(
+                              userId, titleController.text.trim(), amt, 'ค่าใช้จ่ายประจำ',
+                              startDate, isIndefinite ? null : endDate, isIndefinite, dayOfMonth,
+                            );
+                          }
+                          if (context.mounted) Navigator.pop(context);
+                          _loadRecurring();
+                          DataEventService.notifyDataChanged();
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('บันทึกไม่สำเร็จ: ${e.toString().replaceAll("Exception: ", "")}')),
+                            );
+                          }
+                        }
                       },
                     ),
                   ),

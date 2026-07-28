@@ -47,6 +47,7 @@ class ApiConfig {
   static String finance(String userId) => '$baseUrl/api/finance/$userId';
   static String financeSummary(String userId) => '$baseUrl/api/finance/summary/$userId';
   static String financeRecurring(String userId) => '$baseUrl/api/finance/recurring/$userId';
+  static String get financeRecurringAdd => '$baseUrl/api/finance/recurring';
   static String financeRecurringItem(String id) => '$baseUrl/api/finance/recurring/$id';
   static String financeBreakdown(String userId, String period, {int? year, int? month}) {
     final params = <String, String>{'period': period};

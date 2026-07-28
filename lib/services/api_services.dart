@@ -111,7 +111,7 @@ class FinanceApiService {
     bool isIndefinite,
     int dayOfMonthDue,
   ) async {
-    return await ApiClient.post(ApiConfig.financeRecurring(userId), {
+    return await ApiClient.post(ApiConfig.financeRecurringAdd, {
       'userId': userId,
       'title': title,
       'amount': amount,
