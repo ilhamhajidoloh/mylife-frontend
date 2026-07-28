@@ -446,7 +446,9 @@ class _OverviewPageState extends State<OverviewPage> {
             SectionCard(
               title: 'วิชาเรียนวันนี้',
               caption: (_todayClasses?['termName'] != null && _todayClasses!['termName'].toString().isNotEmpty)
-                  ? 'ภาคเรียน: ${_todayClasses!['termName']}'
+                  ? (_todayClasses!['termName'].toString().startsWith('ภาคเรียน')
+                      ? '${_todayClasses!['termName']}'
+                      : 'ภาคเรียน: ${_todayClasses!['termName']}')
                   : 'อัพเดทล่าสุด',
               child: Column(
                 children: [
