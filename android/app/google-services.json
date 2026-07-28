@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "1015105923446",
+    "project_id": "my-life-app-497120",
+    "storage_bucket": "my-life-app-497120.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1015105923446:android:87a416aaca676f82d8b257",
+        "android_client_info": {
+          "package_name": "com.example.front_mylife"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1015105923446-bsvsdn5pf6eho229nffjf8u75ob0j77l.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.front_mylife",
+            "certificate_hash": "4febd62e04e6cb499e716da7d861bf00b89ea383"
+          }
+        },
+        {
+          "client_id": "1015105923446-9bm732p3tdsmqgtl9okpj9j73290n5tp.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC8pvux1OckS56mphEJwL3uSdof5LCC9pI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1015105923446-9bm732p3tdsmqgtl9okpj9j73290n5tp.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
