@@ -83,7 +83,7 @@ class ApiClient {
       );
       Logger.apiResponse(method, url, response.statusCode, _tryDecodeBody(response.body));
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        return jsonDecode(response.body);
+        return _tryDecodeBody(response.body);
       } else {
         throw Exception('Server Error ${response.statusCode}: ${response.body}');
       }
@@ -108,7 +108,7 @@ class ApiClient {
       );
       Logger.apiResponse(method, url, response.statusCode, _tryDecodeBody(response.body));
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        return jsonDecode(response.body);
+        return _tryDecodeBody(response.body);
       } else {
         throw Exception('Server Error ${response.statusCode}: ${response.body}');
       }
@@ -133,7 +133,7 @@ class ApiClient {
       );
       Logger.apiResponse(method, url, response.statusCode, _tryDecodeBody(response.body));
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        return jsonDecode(response.body);
+        return _tryDecodeBody(response.body);
       } else {
         throw Exception('Server Error ${response.statusCode}: ${response.body}');
       }
@@ -154,7 +154,7 @@ class ApiClient {
       );
       Logger.apiResponse(method, url, response.statusCode, _tryDecodeBody(response.body));
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        return jsonDecode(response.body);
+        return _tryDecodeBody(response.body);
       } else {
         throw Exception('Server Error ${response.statusCode}: ${response.body}');
       }
@@ -164,8 +164,10 @@ class ApiClient {
   }
 
   static dynamic _tryDecodeBody(String body) {
+    final trimmed = body.trim();
+    if (trimmed.isEmpty) return null;
     try {
-      return jsonDecode(body);
+      return jsonDecode(trimmed);
     } catch (_) {
       return body;
     }

@@ -262,8 +262,9 @@ class _TodolistPageState extends State<TodolistPage> {
                         child: child!,
                       ),
                     );
-                    if (picked != null)
+                    if (picked != null) {
                       setModalState(() => targetDate = picked);
+                    }
                   },
                   child: Container(
                     width: double.infinity,
@@ -719,19 +720,15 @@ class _TodolistPageState extends State<TodolistPage> {
                             children: [
                               GestureDetector(
                                 onTap: () async {
-                                  final targetDate = item['targetDate'] != null
-                                      ? (DateTime.tryParse(
-                                              item['targetDate'],
-                                            ) ??
-                                            _viewAnchor)
-                                      : _viewAnchor;
-                                  await TodoApiService.updateTodo(
+                                  final completionDate = _selectedView == 'วัน'
+                                      ? _viewAnchor
+                                      : (item['targetDate'] != null
+                                            ? (DateTime.tryParse(item['targetDate']) ?? _viewAnchor)
+                                            : _viewAnchor);
+                                  await TodoApiService.updateCompletion(
                                     item['id'],
-                                    item['title'],
-                                    item['tag'] ?? 'ทั่วไป',
-                                    targetDate,
-                                    (item['recurrence'] as num?)?.toInt() ?? 0,
                                     !(item['isCompleted'] == true),
+                                    completionDate,
                                   );
                                   _loadTodos();
                                   DataEventService.notifyDataChanged();
@@ -805,6 +802,16 @@ class _TodolistPageState extends State<TodolistPage> {
                                 ),
                               ),
                               IconButton(
+                                tooltip: 'แก้ไขรายการ',
+                                icon: Icon(
+                                  Icons.edit_outlined,
+                                  size: 20,
+                                  color: c.accent,
+                                ),
+                                onPressed: () => _openTodoModal(item),
+                              ),
+                              IconButton(
+                                tooltip: 'ลบรายการ',
                                 icon: Icon(
                                   Icons.delete_outline_rounded,
                                   size: 20,

@@ -412,6 +412,15 @@ class TodoApiService {
   static Future<dynamic> deleteTodo(String id) async {
     return await ApiClient.delete('${ApiConfig.baseUrl}/api/todo/$id');
   }
+
+  /// ติ๊กสำเร็จ/ยกเลิก — ใช้ endpoint นี้แทน updateTodo เพราะรองรับ todo แบบทำซ้ำ
+  /// (แต่ละวันที่เกิดซ้ำมีสถานะสำเร็จแยกกัน ผ่านตาราง TodoCompletions)
+  static Future<dynamic> updateCompletion(String id, bool isCompleted, DateTime date) async {
+    return await ApiClient.put('${ApiConfig.baseUrl}/api/todo/$id/completion', {
+      'isCompleted': isCompleted,
+      'date': date.toIso8601String(),
+    });
+  }
 }
 
 class TaskApiService {
