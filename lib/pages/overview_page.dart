@@ -29,6 +29,7 @@ class _OverviewPageState extends State<OverviewPage> {
   Map<String, dynamic>? _activityTimeline;
   Map<String, dynamic>? _todoDaily;
   List<dynamic> _urgentTasks = [];
+  List<dynamic> _recurringExpenses = [];
 
   String _breakdownPeriod = 'monthly';
   List<dynamic> _breakdownData = [];
@@ -108,6 +109,9 @@ class _OverviewPageState extends State<OverviewPage> {
       final cachedTasks = await CacheService.get(userId, CacheService.taskUrgent);
       if (cachedTasks != null) _urgentTasks = cachedTasks;
 
+      final cachedRecurring = await CacheService.get(userId, CacheService.financeRecurring);
+      if (cachedRecurring != null && cachedRecurring is List) _recurringExpenses = cachedRecurring;
+
       // หากมีข้อมูลแคชอยู่แล้ว ปิดสถานะ _isLoading ทันที
       if (cachedFinance != null || cachedClasses != null || cachedTasks != null) {
         if (mounted) setState(() => _isLoading = false);
@@ -145,6 +149,12 @@ class _OverviewPageState extends State<OverviewPage> {
       if (urgentTasks != null) {
         _urgentTasks = urgentTasks;
         await CacheService.save(userId, CacheService.taskUrgent, _urgentTasks);
+      }
+
+      final recurringList = await FinanceApiService.getRecurring(userId);
+      if (recurringList != null && recurringList is List) {
+        _recurringExpenses = recurringList;
+        await CacheService.save(userId, CacheService.financeRecurring, _recurringExpenses);
       }
 
       if (_activityTimeline != null && _activityTimeline!['countdownSeconds'] != null) {
@@ -426,6 +436,10 @@ class _OverviewPageState extends State<OverviewPage> {
 
             // Income vs Expense breakdown chart
             _buildBreakdownSection(c),
+            const SizedBox(height: 16),
+
+            // Recurring Expenses Section
+            _buildRecurringExpensesSection(c),
             const SizedBox(height: 16),
 
             // Today's Classes
@@ -890,6 +904,189 @@ class _OverviewPageState extends State<OverviewPage> {
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildRecurringExpensesSection(AppColors c) {
+    if (_recurringExpenses.isEmpty) {
+      return SectionCard(
+        title: 'รายจ่ายประจำใกล้ที่สุด',
+        caption: 'อัพเดทล่าสุด',
+        icon: Icons.event_repeat_rounded,
+        iconColor: c.amber,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text('ยังไม่มีรายการจ่ายประจำ', style: TextStyle(color: c.ink3)),
+        ),
+      );
+    }
+
+    final now = DateTime.now();
+    final todayOnly = DateTime(now.year, now.month, now.day);
+
+    dynamic nearestItem;
+    DateTime? nearestNextDue;
+    int minDays = 999999;
+
+    for (var r in _recurringExpenses) {
+      final day = (r['dayOfMonthDue'] as num?)?.toInt() ?? 1;
+      DateTime dueDateFor(int y, int m) {
+        final daysInMonth = DateTime(y, m + 1, 0).day;
+        return DateTime(y, m, day.clamp(1, daysInMonth));
+      }
+
+      var nextDue = dueDateFor(now.year, now.month);
+      if (nextDue.isBefore(todayOnly)) {
+        final nextMonth = now.month == 12 ? 1 : now.month + 1;
+        final nextYear = now.month == 12 ? now.year + 1 : now.year;
+        nextDue = dueDateFor(nextYear, nextMonth);
+      }
+
+      final daysUntil = nextDue.difference(todayOnly).inDays;
+      if (daysUntil < minDays) {
+        minDays = daysUntil;
+        nearestItem = r;
+        nearestNextDue = nextDue;
+      }
+    }
+
+    if (nearestItem == null || nearestNextDue == null) {
+      return SectionCard(
+        title: 'รายจ่ายประจำใกล้ที่สุด',
+        caption: 'อัพเดทล่าสุด',
+        icon: Icons.event_repeat_rounded,
+        iconColor: c.amber,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text('ยังไม่มีรายการจ่ายประจำ', style: TextStyle(color: c.ink3)),
+        ),
+      );
+    }
+
+    final dueTarget = DateTime(nearestNextDue.year, nearestNextDue.month, nearestNextDue.day, 23, 59, 59);
+    final remaining = dueTarget.difference(now);
+
+    String countdownText;
+    if (remaining.isNegative) {
+      countdownText = 'เลยกำหนด';
+    } else if (minDays == 0) {
+      final h = remaining.inHours.toString().padLeft(2, '0');
+      final m = remaining.inMinutes.remainder(60).toString().padLeft(2, '0');
+      final s = remaining.inSeconds.remainder(60).toString().padLeft(2, '0');
+      countdownText = 'เหลือ $h:$m:$s';
+    } else {
+      final h = remaining.inHours.remainder(24).toString().padLeft(2, '0');
+      final m = remaining.inMinutes.remainder(60).toString().padLeft(2, '0');
+      final s = remaining.inSeconds.remainder(60).toString().padLeft(2, '0');
+      countdownText = '$minDaysวัน $h:$m:$s';
+    }
+
+    final day = (nearestItem['dayOfMonthDue'] as num?)?.toInt() ?? 1;
+    final amt = (nearestItem['amount'] as num?)?.toDouble() ?? 0.0;
+    final title = nearestItem['title'] ?? '';
+
+    final dueLabel = minDays == 0 ? 'ครบกำหนดวันนี้' : 'อีก $minDays วัน';
+    final Color dueFg = minDays == 0 ? c.coral : (minDays <= 3 ? c.amber : c.ink3);
+    final Color dueBg = minDays == 0 ? c.coralSoft : (minDays <= 3 ? c.amberSoft : c.surface2);
+
+    return SectionCard(
+      title: 'รายจ่ายประจำใกล้ที่สุด',
+      caption: 'รายการถัดไปที่ต้องชำระ',
+      icon: Icons.event_repeat_rounded,
+      iconColor: c.amber,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: c.amberSoft.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: c.amber.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: minDays == 0 ? [c.coral, c.amber] : [c.amber, c.accent],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: (minDays == 0 ? c.coral : c.amber).withValues(alpha: 0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.timer_rounded, color: Colors.white, size: 18),
+                  const SizedBox(height: 4),
+                  Text(
+                    countdownText,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.white,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                  Text(
+                    'นับถอยหลัง',
+                    style: TextStyle(
+                      fontSize: 9.5,
+                      color: Colors.white.withValues(alpha: 0.85),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                      color: c.ink,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'จ่ายทุกวันที่ $day ของเดือน',
+                    style: TextStyle(fontSize: 12, color: c.ink3, fontWeight: FontWeight.w500),
+                  ),
+                  const SizedBox(height: 6),
+                  Pill(dueLabel, fg: dueFg, bg: dueBg),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  '฿${amt.toStringAsFixed(0)}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 18,
+                    color: c.ink,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
