@@ -27,6 +27,7 @@ class _SchedulePageState extends State<SchedulePage> {
 
   int _selectedDay = DateTime.now().weekday; // 1=Mon..7=Sun
   List<dynamic> _academicTerms = [];
+  int _selectedTermIndex = 0;
 
   Timer? _timer;
   DateTime _now = DateTime.now();
@@ -53,15 +54,8 @@ class _SchedulePageState extends State<SchedulePage> {
     final cached = await CacheService.get(userId, CacheService.scheduleTerms);
     if (cached != null && cached is List && cached.isNotEmpty) {
       _academicTerms = cached;
-      final currentTerm = cached.first;
-      _termId = currentTerm['id'];
-      _termName = currentTerm['termName'] ?? 'ภาคเรียน';
-      if (currentTerm['startDate'] != null) {
-        _termStartDate = DateTime.tryParse(currentTerm['startDate']) ?? _termStartDate;
-      }
-      if (currentTerm['endDate'] != null) {
-        _termEndDate = DateTime.tryParse(currentTerm['endDate']) ?? _termEndDate;
-      }
+      _selectedTermIndex = _findDefaultTermIndex(cached);
+      _updateActiveTermData();
       await _rescheduleAllCourseNotifications();
       if (mounted) setState(() => _isLoading = false);
     } else {
@@ -72,19 +66,10 @@ class _SchedulePageState extends State<SchedulePage> {
       final terms = await ScheduleApiService.getTerms(userId);
       if (terms != null && terms is List && terms.isNotEmpty) {
         _academicTerms = terms;
-        final currentTerm = terms.first;
-        _termId = currentTerm['id'];
-        _termName = currentTerm['termName'] ?? 'ภาคเรียน';
-        if (currentTerm['startDate'] != null) {
-          _termStartDate = DateTime.tryParse(currentTerm['startDate']) ?? _termStartDate;
-        }
-        if (currentTerm['endDate'] != null) {
-          _termEndDate = DateTime.tryParse(currentTerm['endDate']) ?? _termEndDate;
-        }
+        _selectedTermIndex = _findDefaultTermIndex(terms);
+        _updateActiveTermData();
         await CacheService.save(userId, CacheService.scheduleTerms, terms);
       }
-
-      // ตั้งเวลาแจ้งเตือนสำหรับวิชาเรียนทั้งหมดที่มีอยู่
       await _rescheduleAllCourseNotifications();
     } catch (e, st) {
       Logger.catchBlock('SchedulePage', 'loadScheduleData', e, st);
@@ -93,11 +78,72 @@ class _SchedulePageState extends State<SchedulePage> {
     }
   }
 
+  int _findDefaultTermIndex(List<dynamic> terms) {
+    if (terms.isEmpty) return 0;
+    final now = DateTime.now();
+    final todayOnly = DateTime(now.year, now.month, now.day);
+
+    // 1. ค้นหาเทอมที่วันที่ปัจจุบันอยู่ในช่วง [StartDate..EndDate]
+    for (int i = 0; i < terms.length; i++) {
+      final t = terms[i];
+      DateTime? sDate = t['startDate'] != null ? DateTime.tryParse(t['startDate']) : null;
+      DateTime? eDate = t['endDate'] != null ? DateTime.tryParse(t['endDate']) : null;
+
+      if (sDate != null && eDate != null) {
+        final sOnly = DateTime(sDate.year, sDate.month, sDate.day);
+        final eOnly = DateTime(eDate.year, eDate.month, eDate.day, 23, 59, 59);
+        if (now.isAfter(sOnly) && now.isBefore(eOnly)) {
+          return i;
+        }
+      }
+    }
+
+    // 2. หากไม่มีเทอมที่ตรงกับช่วงวันที่ปัจจุบันพอดี ให้หาเทอมที่ใกล้วันปัจจุบันมากที่สุด
+    int closestIndex = 0;
+    int minDiffDays = 999999;
+    for (int i = 0; i < terms.length; i++) {
+      final t = terms[i];
+      DateTime? sDate = t['startDate'] != null ? DateTime.tryParse(t['startDate']) : null;
+      if (sDate != null) {
+        final sOnly = DateTime(sDate.year, sDate.month, sDate.day);
+        final diff = (sOnly.difference(todayOnly).inDays).abs();
+        if (diff < minDiffDays) {
+          minDiffDays = diff;
+          closestIndex = i;
+        }
+      }
+    }
+
+    return closestIndex;
+  }
+
+  void _updateActiveTermData() {
+    if (_academicTerms.isEmpty) {
+      _termId = null;
+      _termName = 'ยังไม่ได้ตั้งค่าภาคเรียน';
+      _termStartDate = DateTime.now();
+      _termEndDate = DateTime.now().add(const Duration(days: 120));
+      return;
+    }
+    if (_selectedTermIndex >= _academicTerms.length) {
+      _selectedTermIndex = 0;
+    }
+    final currentTerm = _academicTerms[_selectedTermIndex];
+    _termId = currentTerm['id'];
+    _termName = currentTerm['termName'] ?? 'ภาคเรียน';
+    if (currentTerm['startDate'] != null) {
+      _termStartDate = DateTime.tryParse(currentTerm['startDate']) ?? _termStartDate;
+    }
+    if (currentTerm['endDate'] != null) {
+      _termEndDate = DateTime.tryParse(currentTerm['endDate']) ?? _termEndDate;
+    }
+  }
+
   /// ตั้งเวลาแจ้งเตือนสำหรับวิชาเรียนทั้งหมดที่โหลดมาใหม่
   Future<void> _rescheduleAllCourseNotifications() async {
-    if (_academicTerms.isEmpty) return;
+    if (_academicTerms.isEmpty || _selectedTermIndex >= _academicTerms.length) return;
     try {
-      final courses = (_academicTerms.first['courses'] as List?) ?? [];
+      final courses = (_academicTerms[_selectedTermIndex]['courses'] as List?) ?? [];
       for (final course in courses) {
         final id = course['id'];
         final name = course['courseName'] ?? course['courseCode'] ?? '';
@@ -174,8 +220,8 @@ class _SchedulePageState extends State<SchedulePage> {
   }
 
   List<dynamic> get _selectedDayClasses {
-    if (_academicTerms.isEmpty) return [];
-    final courses = _academicTerms.first['courses'];
+    if (_academicTerms.isEmpty || _selectedTermIndex >= _academicTerms.length) return [];
+    final courses = _academicTerms[_selectedTermIndex]['courses'];
     if (courses == null || courses is! List) return [];
     return courses.where((c) {
       final day = c['dayOfWeek'];
@@ -213,13 +259,184 @@ class _SchedulePageState extends State<SchedulePage> {
   }
 
   void _openAcademicTermModal() {
-    final termController = TextEditingController(text: _termName == 'ยังไม่ได้ตั้งค่าภาคเรียน' ? '' : _termName);
-    DateTime startDate = _termStartDate;
-    DateTime endDate = _termEndDate;
+    _openTermManagementModal();
+  }
+
+  void _openTermManagementModal() {
+    showAppBottomSheet(
+      context,
+      title: 'จัดการภาคเรียน',
+      subtitle: 'เลือกหรือเพิ่ม/แก้ไขภาคเรียนทั้งหมด',
+      child: StatefulBuilder(
+        builder: (context, setModalState) {
+          final cc = context.c;
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              GestureDetector(
+                onTap: () {
+                  Navigator.pop(context);
+                  _openAddOrEditTermModal();
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    gradient: cc.accentGradient,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.add_rounded, color: Colors.white, size: 20),
+                      SizedBox(width: 6),
+                      Text('เพิ่มภาคเรียนใหม่',
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (_academicTerms.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Center(child: Text('ยังไม่มีภาคเรียนในระบบ', style: TextStyle(color: cc.ink3))),
+                )
+              else
+                Column(
+                  children: List.generate(_academicTerms.length, (i) {
+                    final term = _academicTerms[i];
+                    final isSelected = _selectedTermIndex == i;
+                    final courseCount = (term['courses'] as List?)?.length ?? 0;
+                    DateTime? sDate = term['startDate'] != null ? DateTime.tryParse(term['startDate']) : null;
+                    DateTime? eDate = term['endDate'] != null ? DateTime.tryParse(term['endDate']) : null;
+                    String dateStr = '';
+                    if (sDate != null && eDate != null) {
+                      dateStr = '${sDate.day}/${sDate.month}/${sDate.year} - ${eDate.day}/${eDate.month}/${eDate.year}';
+                    }
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: isSelected ? cc.accentSoft.withValues(alpha: 0.5) : cc.surface2,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isSelected ? cc.accent : cc.border.withValues(alpha: 0.5),
+                          width: isSelected ? 1.5 : 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 38,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              color: isSelected ? cc.accent : cc.surface,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(Icons.school_rounded, color: isSelected ? Colors.white : cc.accent, size: 20),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        term['termName'] ?? 'ภาคเรียน',
+                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14.5, color: cc.ink),
+                                      ),
+                                    ),
+                                    if (isSelected)
+                                      Pill('ใช้งานอยู่', fg: cc.accent, bg: cc.accentSoft),
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '$dateStr • $courseCount วิชา',
+                                  style: TextStyle(fontSize: 12, color: cc.ink3),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (!isSelected)
+                                GestureDetector(
+                                  onTap: () {
+                                    setState(() {
+                                      _selectedTermIndex = i;
+                                      _updateActiveTermData();
+                                    });
+                                    _rescheduleAllCourseNotifications();
+                                    Navigator.pop(context);
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    margin: const EdgeInsets.only(right: 6),
+                                    decoration: BoxDecoration(
+                                      color: cc.accent,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Text('เลือก', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                                  ),
+                                ),
+                              GestureDetector(
+                                onTap: () {
+                                  Navigator.pop(context);
+                                  _openAddOrEditTermModal(term);
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(color: cc.surface, borderRadius: BorderRadius.circular(10)),
+                                  child: Icon(Icons.edit_rounded, size: 18, color: cc.ink2),
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              GestureDetector(
+                                onTap: () {
+                                  Navigator.pop(context);
+                                  _confirmDeleteTerm(term);
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(color: cc.coralSoft, borderRadius: BorderRadius.circular(10)),
+                                  child: Icon(Icons.delete_outline_rounded, size: 18, color: cc.coral),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _openAddOrEditTermModal([dynamic item]) {
+    final isEdit = item != null;
+    final termController = TextEditingController(text: item?['termName'] ?? '');
+    DateTime startDate = isEdit && item['startDate'] != null
+        ? (DateTime.tryParse(item['startDate']) ?? DateTime.now())
+        : DateTime.now();
+    DateTime endDate = isEdit && item['endDate'] != null
+        ? (DateTime.tryParse(item['endDate']) ?? DateTime.now().add(const Duration(days: 120)))
+        : DateTime.now().add(const Duration(days: 120));
 
     showAppDialog(
       context,
-      title: 'ตั้งค่าเทอม',
+      title: isEdit ? 'แก้ไขภาคเรียน' : 'เพิ่มภาคเรียนใหม่',
       subtitle: 'กำหนดชื่อและวันที่ภาคเรียน',
       content: StatefulBuilder(
         builder: (context, setModalState) {
@@ -227,7 +444,7 @@ class _SchedulePageState extends State<SchedulePage> {
           return Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              AppModalField(controller: termController, label: 'ชื่อภาคเรียน', icon: Icons.school_rounded),
+              AppModalField(controller: termController, label: 'ชื่อภาคเรียน เช่น ภาคเรียน 1/2567', icon: Icons.school_rounded),
               const SizedBox(height: 14),
               GestureDetector(
                 onTap: () async {
@@ -271,17 +488,48 @@ class _SchedulePageState extends State<SchedulePage> {
         AppModalButton(
           label: 'บันทึก',
           onPressed: () async {
+            if (termController.text.trim().isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('กรุณากรอกชื่อภาคเรียน')),
+              );
+              return;
+            }
             final userId = await UserSession.getUserId();
-            if (_termId != null) {
-              await ScheduleApiService.updateTerm(_termId!, userId, termController.text, startDate, endDate);
+            if (isEdit && item?['id'] != null) {
+              await ScheduleApiService.updateTerm(item['id'].toString(), userId, termController.text.trim(), startDate, endDate);
             } else {
-              await ScheduleApiService.addTerm(userId, termController.text, startDate, endDate);
+              await ScheduleApiService.addTerm(userId, termController.text.trim(), startDate, endDate);
             }
             if (mounted) Navigator.pop(context);
-            _loadScheduleData();
+            await _loadScheduleData();
+            DataEventService.notifyDataChanged();
           },
         ),
       ],
+    );
+  }
+
+  void _confirmDeleteTerm(dynamic item) {
+    if (item == null || item['id'] == null) return;
+    final termName = item['termName'] ?? 'ภาคเรียนนี้';
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('ยืนยันการลบภาคเรียน'),
+        content: Text('คุณต้องการลบ "$termName" หรือไม่?\nวิชาเรียนทั้งหมดในภาคเรียนนี้จะถูกลบไปด้วย'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('ยกเลิก')),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await ScheduleApiService.deleteTerm(item['id'].toString());
+              await _loadScheduleData();
+              DataEventService.notifyDataChanged();
+            },
+            child: const Text('ลบ', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
     );
   }
 
@@ -315,6 +563,7 @@ class _SchedulePageState extends State<SchedulePage> {
     int dayOfWeek = (rawDay == 0) ? 7 : rawDay;
     TimeOfDay startTime = _parseTime(item?['startTime'] ?? '09:00');
     TimeOfDay endTime = _parseTime(item?['endTime'] ?? '10:00');
+    String targetTermId = (item?['termId'] ?? item?['academicTermId'] ?? _termId ?? (_academicTerms.isNotEmpty ? _academicTerms[_selectedTermIndex]['id'] : '')).toString();
 
     showAppBottomSheet(
       context,
@@ -322,10 +571,71 @@ class _SchedulePageState extends State<SchedulePage> {
       child: StatefulBuilder(
         builder: (context, setModalState) {
           final cc = context.c;
+          final activeTermObj = _academicTerms.firstWhere((t) => t['id'].toString() == targetTermId, orElse: () => null);
+          final activeTermName = activeTermObj != null ? (activeTermObj['termName'] ?? 'ภาคเรียน') : _termName;
+
           return Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Term Badge / Selector
+              if (_academicTerms.length > 1)
+                AppModalSection(
+                  title: 'ภาคเรียนที่จะบันทึกวิชาลงไป',
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: cc.accentSoft.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: cc.accent.withValues(alpha: 0.3)),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: targetTermId.isNotEmpty && _academicTerms.any((t) => t['id'].toString() == targetTermId)
+                            ? targetTermId
+                            : null,
+                        isExpanded: true,
+                        icon: Icon(Icons.arrow_drop_down_rounded, color: cc.accent),
+                        items: _academicTerms.map<DropdownMenuItem<String>>((t) {
+                          final id = t['id'].toString();
+                          final name = t['termName'] ?? 'ภาคเรียน';
+                          return DropdownMenuItem<String>(
+                            value: id,
+                            child: Row(
+                              children: [
+                                Icon(Icons.school_rounded, size: 16, color: cc.accent),
+                                const SizedBox(width: 8),
+                                Text(name, style: TextStyle(fontWeight: FontWeight.bold, color: cc.ink, fontSize: 13.5)),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (val) {
+                          if (val != null) setModalState(() => targetTermId = val);
+                        },
+                      ),
+                    ),
+                  ),
+                )
+              else
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: cc.accentSoft.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: cc.accent.withValues(alpha: 0.2)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.school_rounded, size: 18, color: cc.accent),
+                      const SizedBox(width: 8),
+                      Text('บันทึกลงภาคเรียน: $activeTermName', style: TextStyle(fontWeight: FontWeight.w700, color: cc.accent, fontSize: 13)),
+                    ],
+                  ),
+                ),
+              const SizedBox(height: 14),
+
               AppModalField(controller: codeController, label: 'รหัสวิชา', icon: Icons.tag_rounded),
               const SizedBox(height: 12),
               AppModalField(controller: nameController, label: 'ชื่อวิชา', icon: Icons.book_rounded),
@@ -446,10 +756,12 @@ class _SchedulePageState extends State<SchedulePage> {
                         final startStr = '${_pad(startTime.hour)}:${_pad(startTime.minute)}';
                         final endStr = '${_pad(endTime.hour)}:${_pad(endTime.minute)}';
 
+                        final termIdToUse = targetTermId.isNotEmpty ? targetTermId : (_termId ?? '');
+
                         if (isEdit && item != null && item['id'] != null) {
                           await ScheduleApiService.updateCourse(
                             item['id'].toString(),
-                            _termId ?? '',
+                            termIdToUse,
                             finalCode,
                             finalName,
                             roomController.text.trim(),
@@ -460,7 +772,7 @@ class _SchedulePageState extends State<SchedulePage> {
                           );
                         } else {
                           await ScheduleApiService.addCourse(
-                            _termId ?? '',
+                            termIdToUse,
                             finalCode,
                             finalName,
                             roomController.text.trim(),
@@ -656,6 +968,76 @@ class _SchedulePageState extends State<SchedulePage> {
               ],
             ),
 
+            // Term Selector Chips
+            if (_academicTerms.length > 1) ...[
+              const SizedBox(height: 12),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (int i = 0; i < _academicTerms.length; i++) ...[
+                      GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _selectedTermIndex = i;
+                            _updateActiveTermData();
+                          });
+                          _rescheduleAllCourseNotifications();
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: _selectedTermIndex == i ? c.accent : c.surface2,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: _selectedTermIndex == i ? c.accent : c.border.withValues(alpha: 0.5),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.school_rounded,
+                                size: 14,
+                                color: _selectedTermIndex == i ? Colors.white : c.ink3,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                _academicTerms[i]['termName'] ?? 'ภาคเรียน',
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: _selectedTermIndex == i ? Colors.white : c.ink2,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    GestureDetector(
+                      onTap: () => _openAddOrEditTermModal(),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: c.accentSoft,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.add_rounded, size: 16, color: c.accent),
+                            const SizedBox(width: 4),
+                            Text('เพิ่มเทอม', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: c.accent)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
             // Term info bar
             if (_academicTerms.isNotEmpty) ...[
               const SizedBox(height: 12),
@@ -680,7 +1062,7 @@ class _SchedulePageState extends State<SchedulePage> {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      '${(_academicTerms.first['courses'] as List?)?.length ?? 0} วิชา',
+                      '${(_academicTerms.isNotEmpty && _selectedTermIndex < _academicTerms.length ? (_academicTerms[_selectedTermIndex]['courses'] as List?)?.length : 0) ?? 0} วิชา',
                       style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: c.ink3),
                     ),
                   ],
@@ -784,7 +1166,9 @@ class _SchedulePageState extends State<SchedulePage> {
                 title: 'ตารางเรียนรายสัปดาห์',
                 caption: 'ภาพรวมทั้งสัปดาห์',
                 child: TimetableView(
-                  courses: _academicTerms.isNotEmpty ? (_academicTerms.first['courses'] as List? ?? []) : [],
+                  courses: (_academicTerms.isNotEmpty && _selectedTermIndex < _academicTerms.length)
+                      ? (_academicTerms[_selectedTermIndex]['courses'] as List? ?? [])
+                      : [],
                 ),
               ),
             ],

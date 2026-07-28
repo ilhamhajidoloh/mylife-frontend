@@ -191,6 +191,10 @@ class ScheduleApiService {
     });
   }
 
+  static Future<dynamic> deleteTerm(String id) async {
+    return await ApiClient.delete('${ApiConfig.baseUrl}/api/schedule/terms/$id');
+  }
+
   static Future<dynamic> addCourse(
     String termId,
     String code,
