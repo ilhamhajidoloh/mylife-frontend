@@ -9,9 +9,9 @@ import 'pages/schedule_page.dart';
 import 'pages/activity_page.dart';
 import 'pages/todolist_page.dart';
 import 'pages/tasks_page.dart';
-import 'pages/health_page.dart';
 import 'pages/auth_page.dart';
 import 'pages/onboarding_page.dart';
+import 'pages/profile_page.dart';
 import 'services/user_session.dart';
 import 'services/notification_service.dart';
 import 'services/connectivity_service.dart';
@@ -200,7 +200,10 @@ class _HomeShellState extends State<HomeShell> {
     await Navigator.push(
       context,
       PageRouteBuilder(
-        pageBuilder: (_, _, _) => const Scaffold(body: SafeArea(child: HealthPage())),
+        pageBuilder: (_, _, _) => ProfilePage(
+          onProfileUpdated: _checkInitialLogin,
+          onLogout: _checkInitialLogin,
+        ),
         transitionsBuilder: (_, anim, _, child) => SlideTransition(
           position: Tween(begin: const Offset(1, 0), end: Offset.zero).animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
           child: child,

@@ -197,7 +197,8 @@ class _FinancePageState extends State<FinancePage> {
 
   void _openTransactionModal([dynamic item]) {
     final isEdit = item != null;
-    final titleController = TextEditingController(text: item?['note'] ?? item?['category'] ?? '');
+    final categoryController = TextEditingController(text: item?['category'] ?? '');
+    final titleController = TextEditingController(text: item?['note'] ?? '');
     final amountController = TextEditingController(text: item?['amount'] != null ? (item!['amount'] as num).toString() : '');
     bool isIncome = isEdit ? (item?['type'] == 0) : false;
 
@@ -208,6 +209,17 @@ class _FinancePageState extends State<FinancePage> {
       child: StatefulBuilder(
         builder: (context, setModalState) {
           final cc = context.c;
+
+          final defaultExpenseCategories = ['อาหาร', 'เดินทาง', 'ช้อปปิ้ง', 'ค่าใช้จ่ายบ้าน', 'บันเทิง', 'สุขภาพ', 'การศึกษา', 'ทั่วไป'];
+          final defaultIncomeCategories = ['เงินเดือน', 'โบนัส', 'ธุรกิจส่วนตัว', 'การลงทุน', 'ของขวัญ', 'ทั่วไป'];
+
+          final baseList = isIncome ? defaultIncomeCategories : defaultExpenseCategories;
+          final existingCats = _transactions
+              .where((t) => (isIncome ? t['type'] == 0 : t['type'] == 1) && t['category'] != null && t['category'].toString().trim().isNotEmpty)
+              .map((t) => t['category'].toString().trim())
+              .toSet();
+          final allCategorySuggestions = {...baseList, ...existingCats}.toList();
+
           return Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -262,11 +274,45 @@ class _FinancePageState extends State<FinancePage> {
                   ],
                 ),
               ),
-              const SizedBox(height: 20),
-              AppModalField(controller: titleController, label: 'ชื่อรายการ', icon: Icons.receipt_rounded),
+              const SizedBox(height: 16),
+
+              // Category Field
+              AppModalField(controller: categoryController, label: 'หมวดหมู่ (เลือกหรือพิมพ์สร้างใหม่)', icon: Icons.category_rounded),
+              const SizedBox(height: 8),
+
+              // Category Chips / Suggestions
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: allCategorySuggestions.map((cat) {
+                    final selected = categoryController.text.trim() == cat;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: ChoiceChip(
+                        label: Text(cat, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: selected ? Colors.white : cc.ink2)),
+                        selected: selected,
+                        selectedColor: isIncome ? cc.good : cc.coral,
+                        backgroundColor: cc.surface2,
+                        onSelected: (val) {
+                          setModalState(() {
+                            categoryController.text = val ? cat : '';
+                          });
+                        },
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              // Title / Note Field
+              AppModalField(controller: titleController, label: 'ชื่อรายการ / หมายเหตุ', icon: Icons.receipt_rounded),
               const SizedBox(height: 12),
+
+              // Amount Field
               AppModalField(controller: amountController, label: 'จำนวนเงิน (บาท)', icon: Icons.payments_rounded, keyboardType: TextInputType.number),
               const SizedBox(height: 24),
+
               Row(
                 children: [
                   if (isEdit) ...[
@@ -291,8 +337,12 @@ class _FinancePageState extends State<FinancePage> {
                       isDestructive: !isIncome,
                       onPressed: () async {
                         final amt = double.tryParse(amountController.text) ?? 0;
-                        if (titleController.text.trim().isEmpty || amt <= 0) return;
+                        if (amt <= 0) return;
+
+                        final categoryText = categoryController.text.trim().isEmpty ? 'ทั่วไป' : categoryController.text.trim();
+                        final noteText = titleController.text.trim().isEmpty ? categoryText : titleController.text.trim();
                         final userId = await UserSession.getUserId();
+
                         if (isEdit && item?['id'] != null) {
                           DateTime? origDate;
                           if (item['transactionDate'] != null) {
@@ -303,12 +353,12 @@ class _FinancePageState extends State<FinancePage> {
                             userId,
                             amt,
                             isIncome,
-                            item['category'] ?? 'ทั่วไป',
-                            titleController.text.trim(),
+                            categoryText,
+                            noteText,
                             transactionDate: origDate,
                           );
                         } else {
-                          await FinanceApiService.addTransaction(userId, amt, isIncome, 'ทั่วไป', titleController.text.trim());
+                          await FinanceApiService.addTransaction(userId, amt, isIncome, categoryText, noteText);
                         }
                         if (context.mounted) Navigator.pop(context);
                         _loadFinanceData();

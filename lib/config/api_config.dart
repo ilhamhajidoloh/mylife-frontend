@@ -43,6 +43,9 @@ class ApiConfig {
   static String get authRegister => '$baseUrl/api/auth/register';
   static String get authLogin => '$baseUrl/api/auth/login';
   static String get authSocialLogin => '$baseUrl/api/auth/social-login';
+  static String get authMe => '$baseUrl/api/auth/me';
+  static String get authProfile => '$baseUrl/api/auth/profile';
+  static String get authPassword => '$baseUrl/api/auth/password';
 
   static String finance(String userId) => '$baseUrl/api/finance/$userId';
   static String financeSummary(String userId) => '$baseUrl/api/finance/summary/$userId';
@@ -71,4 +74,13 @@ class ApiConfig {
 
   static String health(String userId) => '$baseUrl/api/health/$userId';
   static String healthChartData(String userId) => '$baseUrl/api/health/chart-data/$userId';
+
+  static String googleCalendar(String userId) => '$baseUrl/api/googlecalendar/$userId';
+  static String googleCalendarConnect(String userId) => '$baseUrl/api/googlecalendar/$userId/connect';
+
+  static String lineConnection(String userId) => '$baseUrl/api/line/$userId';
+  static String lineConnect(String userId) => '$baseUrl/api/line/$userId/connect';
+  static String lineDisconnect(String userId) => '$baseUrl/api/line/$userId/disconnect';
+
+  static String notification(String userId) => '$baseUrl/api/notification/$userId';
 }

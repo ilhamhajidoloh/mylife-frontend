@@ -9,6 +9,7 @@ import '../services/user_session.dart';
 import '../services/cache_service.dart';
 import '../services/logger.dart';
 import '../services/data_event_service.dart';
+import 'profile_page.dart';
 
 
 class OverviewPage extends StatefulWidget {
@@ -81,6 +82,18 @@ class _OverviewPageState extends State<OverviewPage> {
     _autoRefreshTimer?.cancel();
     _dataSubscription?.cancel();
     super.dispose();
+  }
+
+  Future<void> _showNotificationCenter() async {
+    final userId = await UserSession.getUserId();
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _NotificationCenterSheet(userId: userId),
+    );
   }
 
   Future<void> _fetchDashboardData({bool silent = false}) async {
@@ -372,24 +385,36 @@ class _OverviewPageState extends State<OverviewPage> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('${_greeting()}, $_userName',
-                          style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.9),
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600)),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: const Row(
-                          children: [
-                            Icon(Icons.trending_up, color: Colors.white, size: 14),
-                            SizedBox(width: 4),
-                            Text('สด', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
-                          ],
-                        ),
+                      Expanded(
+                        child: Text('${_greeting()}, $_userName',
+                            style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.9),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600),
+                            overflow: TextOverflow.ellipsis),
+                      ),
+                      Row(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.notifications_outlined, color: Colors.white),
+                            tooltip: 'การแจ้งเตือนจากระบบ',
+                            onPressed: _showNotificationCenter,
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.settings_outlined, color: Colors.white),
+                            tooltip: 'ตั้งค่าโปรไฟล์ & การเชื่อมต่อ',
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => ProfilePage(
+                                    onProfileUpdated: () => _fetchDashboardData(silent: true),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -1091,6 +1116,199 @@ class _OverviewPageState extends State<OverviewPage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _NotificationCenterSheet extends StatefulWidget {
+  final String userId;
+
+  const _NotificationCenterSheet({required this.userId});
+
+  @override
+  State<_NotificationCenterSheet> createState() => _NotificationCenterSheetState();
+}
+
+class _NotificationCenterSheetState extends State<_NotificationCenterSheet> {
+  bool _isLoading = true;
+  List<dynamic> _notifications = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchNotifications();
+  }
+
+  Future<void> _fetchNotifications() async {
+    try {
+      final res = await NotificationApiService.getNotifications(widget.userId);
+      if (res != null && res is List) {
+        _notifications = res;
+      }
+    } catch (_) {
+      _notifications = [];
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  IconData _getTypeIcon(String? type) {
+    switch (type) {
+      case 'balance':
+        return Icons.account_balance_wallet_outlined;
+      case 'class':
+        return Icons.school_outlined;
+      case 'activity':
+        return Icons.event_outlined;
+      case 'task':
+        return Icons.assignment_late_outlined;
+      default:
+        return Icons.notifications_active_outlined;
+    }
+  }
+
+  Color _getSeverityColor(String? severity, AppColors colors) {
+    switch (severity) {
+      case 'high':
+        return colors.coral;
+      case 'medium':
+        return colors.amber;
+      default:
+        return colors.accent;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<AppColors>() ?? AppColors.light;
+
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.75,
+      ),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        children: [
+          // Drag handle
+          Container(
+            margin: const EdgeInsets.only(top: 12, bottom: 8),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: colors.border,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+
+          // Header
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            child: Row(
+              children: [
+                Icon(Icons.notifications_active, color: colors.accent),
+                const SizedBox(width: 10),
+                Text(
+                  'การแจ้งเตือนจากระบบ (Backend)',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: colors.ink,
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  onPressed: () {
+                    setState(() => _isLoading = true);
+                    _fetchNotifications();
+                  },
+                ),
+              ],
+            ),
+          ),
+
+          const Divider(),
+
+          // Body
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _notifications.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.check_circle_outline, size: 48, color: colors.ink3),
+                            const SizedBox(height: 12),
+                            Text(
+                              'ไม่มีรายการแจ้งเตือนในขณะนี้',
+                              style: TextStyle(color: colors.ink2, fontSize: 14),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.separated(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: _notifications.length,
+                        separatorBuilder: (context, index) => const SizedBox(height: 10),
+                        itemBuilder: (context, index) {
+                          final item = _notifications[index];
+                          final type = item['type']?.toString();
+                          final title = item['title']?.toString() ?? 'การแจ้งเตือน';
+                          final message = item['message']?.toString() ?? '';
+                          final severity = item['severity']?.toString();
+                          final color = _getSeverityColor(severity, colors);
+
+                          return Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: colors.surface2,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: colors.border),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                CircleAvatar(
+                                  radius: 20,
+                                  backgroundColor: color.withValues(alpha: 0.15),
+                                  child: Icon(_getTypeIcon(type), color: color, size: 20),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        title,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                          color: colors.ink,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        message,
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: colors.ink2,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+          ),
+        ],
       ),
     );
   }

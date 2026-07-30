@@ -34,6 +34,23 @@ class AuthApiService {
       'fullName': fullName,
     });
   }
+
+  static Future<dynamic> getMe() async {
+    return await ApiClient.get(ApiConfig.authMe);
+  }
+
+  static Future<dynamic> updateProfile(String fullName) async {
+    return await ApiClient.put(ApiConfig.authProfile, {
+      'fullName': fullName,
+    });
+  }
+
+  static Future<dynamic> changePassword(String currentPassword, String newPassword) async {
+    return await ApiClient.put(ApiConfig.authPassword, {
+      'currentPassword': currentPassword,
+      'newPassword': newPassword,
+    });
+  }
 }
 
 class FinanceApiService {
@@ -492,5 +509,58 @@ class HealthApiService {
 
   static Future<dynamic> getChartData(String userId) async {
     return await ApiClient.get(ApiConfig.healthChartData(userId));
+  }
+}
+
+class GoogleCalendarApiService {
+  static Future<dynamic> getConnection(String userId) async {
+    return await ApiClient.get(ApiConfig.googleCalendar(userId));
+  }
+
+  static Future<dynamic> connectWithAuthCode(String userId, String code, String redirectUri) async {
+    return await ApiClient.post(ApiConfig.googleCalendarConnect(userId), {
+      'code': code,
+      'redirectUri': redirectUri,
+    });
+  }
+
+  static Future<dynamic> upsertConnection(
+    String userId,
+    String accessToken,
+    String refreshToken,
+    DateTime tokenExpiresAt,
+  ) async {
+    return await ApiClient.put(ApiConfig.googleCalendar(userId), {
+      'accessToken': accessToken,
+      'refreshToken': refreshToken,
+      'tokenExpiresAt': tokenExpiresAt.toIso8601String(),
+    });
+  }
+
+  static Future<dynamic> deleteConnection(String userId) async {
+    return await ApiClient.delete(ApiConfig.googleCalendar(userId));
+  }
+}
+
+class LineApiService {
+  static Future<dynamic> getConnection(String userId) async {
+    return await ApiClient.get(ApiConfig.lineConnection(userId));
+  }
+
+  static Future<dynamic> connect(String userId, String lineUserId, {bool notificationsEnabled = true}) async {
+    return await ApiClient.post(ApiConfig.lineConnect(userId), {
+      'lineUserId': lineUserId,
+      'notificationsEnabled': notificationsEnabled,
+    });
+  }
+
+  static Future<dynamic> disconnect(String userId) async {
+    return await ApiClient.post(ApiConfig.lineDisconnect(userId), {});
+  }
+}
+
+class NotificationApiService {
+  static Future<dynamic> getNotifications(String userId) async {
+    return await ApiClient.get(ApiConfig.notification(userId));
   }
 }
