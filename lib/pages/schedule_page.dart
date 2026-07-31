@@ -86,13 +86,15 @@ class _SchedulePageState extends State<SchedulePage> {
     // 1. ค้นหาเทอมที่วันที่ปัจจุบันอยู่ในช่วง [StartDate..EndDate]
     for (int i = 0; i < terms.length; i++) {
       final t = terms[i];
-      DateTime? sDate = t['startDate'] != null ? DateTime.tryParse(t['startDate']) : null;
-      DateTime? eDate = t['endDate'] != null ? DateTime.tryParse(t['endDate']) : null;
+      final rawStart = t['startDate'] ?? t['StartDate'];
+      final rawEnd = t['endDate'] ?? t['EndDate'];
+      DateTime? sDate = rawStart != null ? DateTime.tryParse(rawStart.toString()) : null;
+      DateTime? eDate = rawEnd != null ? DateTime.tryParse(rawEnd.toString()) : null;
 
       if (sDate != null && eDate != null) {
         final sOnly = DateTime(sDate.year, sDate.month, sDate.day);
         final eOnly = DateTime(eDate.year, eDate.month, eDate.day, 23, 59, 59);
-        if (now.isAfter(sOnly) && now.isBefore(eOnly)) {
+        if (!now.isBefore(sOnly) && !now.isAfter(eOnly)) {
           return i;
         }
       }
@@ -103,7 +105,8 @@ class _SchedulePageState extends State<SchedulePage> {
     int minDiffDays = 999999;
     for (int i = 0; i < terms.length; i++) {
       final t = terms[i];
-      DateTime? sDate = t['startDate'] != null ? DateTime.tryParse(t['startDate']) : null;
+      final rawStart = t['startDate'] ?? t['StartDate'];
+      DateTime? sDate = rawStart != null ? DateTime.tryParse(rawStart.toString()) : null;
       if (sDate != null) {
         final sOnly = DateTime(sDate.year, sDate.month, sDate.day);
         final diff = (sOnly.difference(todayOnly).inDays).abs();
@@ -129,13 +132,15 @@ class _SchedulePageState extends State<SchedulePage> {
       _selectedTermIndex = 0;
     }
     final currentTerm = _academicTerms[_selectedTermIndex];
-    _termId = currentTerm['id'];
-    _termName = currentTerm['termName'] ?? 'ภาคเรียน';
-    if (currentTerm['startDate'] != null) {
-      _termStartDate = DateTime.tryParse(currentTerm['startDate']) ?? _termStartDate;
+    _termId = (currentTerm['id'] ?? currentTerm['Id'])?.toString();
+    _termName = (currentTerm['termName'] ?? currentTerm['TermName'])?.toString() ?? 'ภาคเรียน';
+    final rawStart = currentTerm['startDate'] ?? currentTerm['StartDate'];
+    final rawEnd = currentTerm['endDate'] ?? currentTerm['EndDate'];
+    if (rawStart != null) {
+      _termStartDate = DateTime.tryParse(rawStart.toString()) ?? _termStartDate;
     }
-    if (currentTerm['endDate'] != null) {
-      _termEndDate = DateTime.tryParse(currentTerm['endDate']) ?? _termEndDate;
+    if (rawEnd != null) {
+      _termEndDate = DateTime.tryParse(rawEnd.toString()) ?? _termEndDate;
     }
   }
 
@@ -221,14 +226,44 @@ class _SchedulePageState extends State<SchedulePage> {
 
   List<dynamic> get _selectedDayClasses {
     if (_academicTerms.isEmpty || _selectedTermIndex >= _academicTerms.length) return [];
-    final courses = _academicTerms[_selectedTermIndex]['courses'];
-    if (courses == null || courses is! List) return [];
+    final activeTerm = _academicTerms[_selectedTermIndex];
+    final courses = (activeTerm['courses'] ?? activeTerm['Courses']) as List?;
+    if (courses == null) return [];
     return courses.where((c) {
-      final day = c['dayOfWeek'];
-      final dartDay = (day == 0) ? 7 : day;
+      final rawDayVal = c['dayOfWeek'] ?? c['DayOfWeek'];
+      int rawDay = 1;
+      if (rawDayVal is int) {
+        rawDay = rawDayVal;
+      } else if (rawDayVal != null) {
+        final str = rawDayVal.toString().toLowerCase().trim();
+        final parsed = int.tryParse(str);
+        if (parsed != null) {
+          rawDay = parsed;
+        } else if (str.contains('sun')) {
+          rawDay = 0;
+        } else if (str.contains('mon')) {
+          rawDay = 1;
+        } else if (str.contains('tue')) {
+          rawDay = 2;
+        } else if (str.contains('wed')) {
+          rawDay = 3;
+        } else if (str.contains('thu')) {
+          rawDay = 4;
+        } else if (str.contains('fri')) {
+          rawDay = 5;
+        } else if (str.contains('sat')) {
+          rawDay = 6;
+        }
+      }
+
+      final dartDay = (rawDay == 0) ? 7 : rawDay;
       return dartDay == _selectedDay;
     }).toList()
-      ..sort((a, b) => (a['startTime'] ?? '').compareTo(b['startTime'] ?? ''));
+      ..sort((a, b) {
+        final aStart = (a['startTime'] ?? a['StartTime'] ?? '').toString();
+        final bStart = (b['startTime'] ?? b['StartTime'] ?? '').toString();
+        return aStart.compareTo(bStart);
+      });
   }
 
   String _dayName(int day) => ['', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์', 'อาทิตย์'][day];
@@ -1062,7 +1097,7 @@ class _SchedulePageState extends State<SchedulePage> {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      '${(_academicTerms.isNotEmpty && _selectedTermIndex < _academicTerms.length ? (_academicTerms[_selectedTermIndex]['courses'] as List?)?.length : 0) ?? 0} วิชา',
+                      '${(_academicTerms.isNotEmpty && _selectedTermIndex < _academicTerms.length ? ((_academicTerms[_selectedTermIndex]['courses'] ?? _academicTerms[_selectedTermIndex]['Courses']) as List?)?.length : 0) ?? 0} วิชา',
                       style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: c.ink3),
                     ),
                   ],

@@ -265,6 +265,23 @@ class TimetableView extends StatelessWidget {
     return parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0;
   }
 
+  int _parseDayOfWeek(dynamic rawDayVal) {
+    if (rawDayVal is int) return rawDayVal;
+    if (rawDayVal != null) {
+      final str = rawDayVal.toString().toLowerCase().trim();
+      final parsed = int.tryParse(str);
+      if (parsed != null) return parsed;
+      if (str.contains('sun')) return 0;
+      if (str.contains('mon')) return 1;
+      if (str.contains('tue')) return 2;
+      if (str.contains('wed')) return 3;
+      if (str.contains('thu')) return 4;
+      if (str.contains('fri')) return 5;
+      if (str.contains('sat')) return 6;
+    }
+    return 1;
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.c;
@@ -289,9 +306,11 @@ class TimetableView extends StatelessWidget {
     // หาช่วงชั่วโมงที่ต้องแสดงจากคาบเรียนจริงทั้งหมด (ปัดขอบให้ครอบคลุมทุกคาบ)
     var minHour = 24, maxHour = 0;
     for (final crs in courses) {
-      final sh = _hourOf(crs['startTime']?.toString(), 8);
-      final eh = _hourOf(crs['endTime']?.toString(), 9);
-      final eMin = _minuteOf(crs['endTime']?.toString());
+      final startStr = (crs['startTime'] ?? crs['StartTime'])?.toString();
+      final endStr = (crs['endTime'] ?? crs['EndTime'])?.toString();
+      final sh = _hourOf(startStr, 8);
+      final eh = _hourOf(endStr, 9);
+      final eMin = _minuteOf(endStr);
       final ceilEndHour = eMin > 0 ? eh + 1 : eh;
       if (sh < minHour) minHour = sh;
       if (ceilEndHour > maxHour) maxHour = ceilEndHour;
@@ -342,8 +361,10 @@ class TimetableView extends StatelessWidget {
                 final dayNum = i + 1;
                 final isToday = dayNum == nowDay;
                 final dayCourses = courses.where((crs) {
-                  final d = crs['dayOfWeek'];
-                  return d == dayNum || (d is int && d == (dayNum % 7));
+                  final rawDay = crs['dayOfWeek'] ?? crs['DayOfWeek'];
+                  final parsedDay = _parseDayOfWeek(rawDay);
+                  final dartDay = (parsedDay == 0) ? 7 : parsedDay;
+                  return dartDay == dayNum;
                 }).toList();
 
                 return Container(
@@ -393,10 +414,10 @@ class TimetableView extends StatelessWidget {
 
   Widget _buildCourseBlock(BuildContext context, dynamic course, double Function(String?) minutesFromGridStart) {
     final c = context.c;
-    final name = course['courseName'] ?? '';
-    final room = course['room'] ?? '';
-    final startTimeStr = course['startTime']?.toString();
-    final endTimeStr = course['endTime']?.toString();
+    final name = (course['courseName'] ?? course['CourseName'] ?? course['courseCode'] ?? course['CourseCode'] ?? '').toString();
+    final room = (course['room'] ?? course['Room'] ?? '').toString();
+    final startTimeStr = (course['startTime'] ?? course['StartTime'])?.toString();
+    final endTimeStr = (course['endTime'] ?? course['EndTime'])?.toString();
     final startTime = (startTimeStr ?? '').split(':').take(2).join(':');
     final endTime = (endTimeStr ?? '').split(':').take(2).join(':');
     final palette = [c.blue, c.accent, c.violet, c.amber, c.coral, c.good];
@@ -425,7 +446,7 @@ class TimetableView extends StatelessWidget {
           children: [
             Text(name, maxLines: height > 40 ? 2 : 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: courseColor)),
             if (height > 34) Text('$startTime-$endTime', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 9, color: c.ink3)),
-            if (height > 50 && room.toString().isNotEmpty)
+            if (height > 50 && room.isNotEmpty)
               Text(room, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 9, color: c.ink3)),
           ],
         ),

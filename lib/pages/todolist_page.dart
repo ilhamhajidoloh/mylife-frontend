@@ -66,8 +66,8 @@ class _TodolistPageState extends State<TodolistPage> {
       final list = await TodoApiService.getTodos(
         userId,
         tag: _selectedTag,
-        year: _viewAnchor.year,
-        month: _selectedView == 'ปี' ? null : _viewAnchor.month,
+        year: _selectedView == 'ทั้งหมด' ? null : _viewAnchor.year,
+        month: (_selectedView == 'ปี' || _selectedView == 'ทั้งหมด') ? null : _viewAnchor.month,
         day: _selectedView == 'วัน' ? _viewAnchor.day : null,
       );
       if (list != null && list is List) {
@@ -88,6 +88,7 @@ class _TodolistPageState extends State<TodolistPage> {
   }
 
   void _shiftView(int delta) {
+    if (_selectedView == 'ทั้งหมด') return;
     setState(() {
       switch (_selectedView) {
         case 'วัน':
@@ -134,6 +135,8 @@ class _TodolistPageState extends State<TodolistPage> {
       'ธ.ค.',
     ];
     switch (_selectedView) {
+      case 'ทั้งหมด':
+        return 'รายการทั้งหมด';
       case 'วัน':
         return '${_viewAnchor.day} ${thMonths[_viewAnchor.month]} ${_viewAnchor.year + 543}';
       case 'เดือน':
@@ -143,8 +146,30 @@ class _TodolistPageState extends State<TodolistPage> {
     }
   }
 
+  int _parseRecurrence(dynamic value) {
+    if (value == null) return 0;
+    if (value is num) return value.toInt();
+    if (value is String) {
+      final p = int.tryParse(value);
+      if (p != null) return p;
+      switch (value.toLowerCase().trim()) {
+        case 'daily':
+          return 1;
+        case 'weekly':
+          return 2;
+        case 'monthly':
+          return 3;
+        case 'yearly':
+          return 4;
+        default:
+          return 0;
+      }
+    }
+    return 0;
+  }
+
   String _recurrenceLabel(dynamic value) {
-    switch ((value as num?)?.toInt() ?? 0) {
+    switch (_parseRecurrence(value)) {
       case 1:
         return 'ทุกวัน';
       case 2:
@@ -162,9 +187,7 @@ class _TodolistPageState extends State<TodolistPage> {
     final isEdit = item != null;
     final titleController = TextEditingController(text: item?['title'] ?? '');
     String tag = item?['tag'] ?? 'เรียน';
-    int recurrence = isEdit && item['recurrence'] != null
-        ? (item['recurrence'] as num).toInt()
-        : 0;
+    int recurrence = isEdit ? _parseRecurrence(item?['recurrence']) : 0;
     DateTime targetDate = isEdit && item['targetDate'] != null
         ? (DateTime.tryParse(item['targetDate']) ?? _viewAnchor)
         : _viewAnchor;
@@ -552,7 +575,7 @@ class _TodolistPageState extends State<TodolistPage> {
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Row(
-                  children: ['วัน', 'เดือน', 'ปี'].map((v) {
+                  children: ['ทั้งหมด', 'วัน', 'เดือน', 'ปี'].map((v) {
                     final isSel = _selectedView == v;
                     return Expanded(
                       child: GestureDetector(
