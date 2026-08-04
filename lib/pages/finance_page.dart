@@ -624,6 +624,24 @@ class _FinancePageState extends State<FinancePage> {
                 children: [
                   if (isEdit) ...[
                     GestureDetector(
+                      onTap: () {
+                        Navigator.pop(context);
+                        _confirmPayRecurring(item, context);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                        decoration: BoxDecoration(color: cc.accentSoft, borderRadius: BorderRadius.circular(12)),
+                        child: Row(
+                          children: [
+                            Icon(Icons.check_circle_outline_rounded, color: cc.accent, size: 18),
+                            const SizedBox(width: 4),
+                            Text('จ่ายแล้ว', style: TextStyle(color: cc.accent, fontWeight: FontWeight.w700, fontSize: 13)),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    GestureDetector(
                       onTap: () => _confirmDeleteRecurring(item, context),
                       child: Container(
                         padding: const EdgeInsets.all(10),
@@ -748,6 +766,185 @@ class _FinancePageState extends State<FinancePage> {
         ),
       ),
     );
+  }
+
+  DateTime _calculateNextDue(dynamic r) {
+    final day = (r['dayOfMonthDue'] as num?)?.toInt() ?? 1;
+    final now = DateTime.now();
+    final todayOnly = DateTime(now.year, now.month, now.day);
+    final firstOfThisMonth = DateTime(todayOnly.year, todayOnly.month, 1);
+
+    DateTime startDate = now;
+    if (r['startDate'] != null) {
+      try {
+        startDate = DateTime.parse(r['startDate']);
+      } catch (_) {}
+    }
+
+    final searchFrom = startDate.isAfter(firstOfThisMonth) ? startDate : firstOfThisMonth;
+
+    DateTime dueDateFor(int y, int m) {
+      final daysInMonth = DateTime(y, m + 1, 0).day;
+      return DateTime(y, m, day.clamp(1, daysInMonth));
+    }
+
+    var nextDue = dueDateFor(searchFrom.year, searchFrom.month);
+    if (nextDue.isBefore(searchFrom)) {
+      final nextMonth = searchFrom.month == 12 ? 1 : searchFrom.month + 1;
+      final nextYear = searchFrom.month == 12 ? searchFrom.year + 1 : searchFrom.year;
+      nextDue = dueDateFor(nextYear, nextMonth);
+    }
+    return nextDue;
+  }
+
+  void _confirmPayRecurring(dynamic item, BuildContext parentContext) {
+    final c = parentContext.c;
+    final title = item['title'] ?? '';
+    final amt = (item['amount'] as num?)?.toDouble() ?? 0.0;
+    final nextDue = _calculateNextDue(item);
+    final fmtDue = '${nextDue.day}/${nextDue.month}/${nextDue.year + 543}';
+
+    showDialog(
+      context: parentContext,
+      builder: (ctx) => Dialog(
+        backgroundColor: c.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: c.accentSoft,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(Icons.check_circle_rounded, color: c.accent, size: 30),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'ยืนยันการชำระเงิน',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: c.ink),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'ยืนยันว่าได้ชำระ "$title" จำนวน ฿${amt.toStringAsFixed(0)} (รอบวันที่ $fmtDue) แล้วใช่หรือไม่?',
+                style: TextStyle(fontSize: 13.5, color: c.ink3, height: 1.4),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: c.surface2,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.info_outline_rounded, size: 14, color: c.ink3),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'ระบบจะจดบันทึกเป็นรายจ่าย และขยับกำหนดชำระเป็นรอบถัดไป',
+                        style: TextStyle(fontSize: 11, color: c.ink3),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: AppModalButton(
+                      label: 'ยังไม่ได้จ่าย',
+                      onPressed: () => Navigator.pop(ctx),
+                      isPrimary: false,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: AppModalButton(
+                      label: 'ยืนยัน (จ่ายแล้ว)',
+                      onPressed: () async {
+                        Navigator.pop(ctx);
+                        await _executePayRecurring(item, parentContext);
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _executePayRecurring(dynamic item, BuildContext parentContext) async {
+    final userId = await UserSession.getUserId();
+    final id = item['id'].toString();
+    final title = item['title'] ?? '';
+    final amt = (item['amount'] as num?)?.toDouble() ?? 0.0;
+    final category = item['category'] ?? 'ค่าใช้จ่ายประจำ';
+    final isIndefinite = item['isIndefinite'] ?? true;
+    final dayOfMonthDue = (item['dayOfMonthDue'] as num?)?.toInt() ?? 1;
+    final endDate = item['endDate'] != null ? DateTime.parse(item['endDate']) : null;
+
+    final currentNextDue = _calculateNextDue(item);
+    final newStartDate = currentNextDue.add(const Duration(days: 1));
+
+    try {
+      // 1. จดใน รายจ่าย
+      await FinanceApiService.addTransaction(
+        userId,
+        amt,
+        false,
+        category,
+        'ชำระรายจ่ายประจำ: $title',
+      );
+
+      // 2. ขยับไป รายจ่ายประจำ อันถัดไป
+      await FinanceApiService.updateRecurring(
+        id,
+        userId,
+        title,
+        amt,
+        category,
+        newStartDate,
+        endDate,
+        isIndefinite,
+        dayOfMonthDue,
+      );
+
+      _loadFinanceData();
+      _loadRecurring();
+      _loadBreakdown();
+      DataEventService.notifyDataChanged();
+
+      if (parentContext.mounted) {
+        final nextDueAfter = _calculateNextDue({
+          ...item,
+          'startDate': newStartDate.toIso8601String(),
+        });
+        final fmtNext = '${nextDueAfter.day}/${nextDueAfter.month}/${nextDueAfter.year + 543}';
+        ScaffoldMessenger.of(parentContext).showSnackBar(
+          SnackBar(
+            content: Text('บันทึกรายจ่าย ฿${amt.toStringAsFixed(0)} เรียบร้อยแล้ว (รอบถัดไป: $fmtNext)'),
+            backgroundColor: parentContext.c.accent,
+          ),
+        );
+      }
+    } catch (e) {
+      if (parentContext.mounted) {
+        ScaffoldMessenger.of(parentContext).showSnackBar(
+          SnackBar(content: Text('เกิดข้อผิดพลาด: ${e.toString().replaceAll("Exception: ", "")}')),
+        );
+      }
+    }
   }
 
   @override
@@ -1207,23 +1404,15 @@ class _FinancePageState extends State<FinancePage> {
       }
 
       // คำนวณวันครบกำหนดจ่ายครั้งถัดไป เพื่อแสดงป้ายนับถอยหลัง
+      final nextDue = _calculateNextDue(r);
       final today = DateTime.now();
       final todayOnly = DateTime(today.year, today.month, today.day);
-      DateTime dueDateFor(int year, int month) {
-        final daysInMonth = DateTime(year, month + 1, 0).day;
-        return DateTime(year, month, day.clamp(1, daysInMonth));
-      }
-
-      var nextDue = dueDateFor(today.year, today.month);
-      if (nextDue.isBefore(todayOnly)) {
-        final nextMonth = today.month == 12 ? 1 : today.month + 1;
-        final nextYear = today.month == 12 ? today.year + 1 : today.year;
-        nextDue = dueDateFor(nextYear, nextMonth);
-      }
       final daysUntil = nextDue.difference(todayOnly).inDays;
-      final dueLabel = daysUntil == 0 ? 'ครบกำหนดวันนี้' : 'อีก $daysUntil วัน';
-      final Color dueFg = daysUntil == 0 ? c.coral : (daysUntil <= 3 ? c.amber : c.ink3);
-      final Color dueBg = daysUntil == 0 ? c.coralSoft : (daysUntil <= 3 ? c.amberSoft : c.surface2);
+      final dueLabel = daysUntil == 0
+          ? 'ครบกำหนดวันนี้'
+          : (daysUntil < 0 ? 'เลยกำหนด ${daysUntil.abs()} วัน' : 'อีก $daysUntil วัน');
+      final Color dueFg = daysUntil <= 0 ? c.coral : (daysUntil <= 3 ? c.amber : c.ink3);
+      final Color dueBg = daysUntil <= 0 ? c.coralSoft : (daysUntil <= 3 ? c.amberSoft : c.surface2);
 
       return GestureDetector(
         onTap: () => _openRecurringModal(r),
@@ -1239,7 +1428,7 @@ class _FinancePageState extends State<FinancePage> {
                 decoration: BoxDecoration(color: c.amberSoft, borderRadius: BorderRadius.circular(10)),
                 child: Icon(Icons.event_repeat_rounded, color: c.amber, size: 18),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1250,14 +1439,37 @@ class _FinancePageState extends State<FinancePage> {
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text('฿${(r['amount'] as num).toStringAsFixed(0)}', style: TextStyle(fontWeight: FontWeight.w800, color: c.ink, fontSize: 14)),
-                  const SizedBox(height: 4),
+                  Text('฿${(r['amount'] as num).toStringAsFixed(0)}', style: TextStyle(fontWeight: FontWeight.w800, color: c.ink, fontSize: 13.5)),
+                  const SizedBox(height: 3),
                   Pill(dueLabel, fg: dueFg, bg: dueBg),
                 ],
+              ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () => _confirmPayRecurring(r, context),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: c.accentSoft,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: c.accent.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.check_circle_rounded, size: 15, color: c.accent),
+                      const SizedBox(width: 4),
+                      Text(
+                        'จ่ายแล้ว',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: c.accent),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),

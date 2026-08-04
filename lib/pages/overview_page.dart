@@ -937,6 +937,184 @@ class _OverviewPageState extends State<OverviewPage> {
     );
   }
 
+  DateTime _calculateNextDue(dynamic r) {
+    final day = (r['dayOfMonthDue'] as num?)?.toInt() ?? 1;
+    final now = DateTime.now();
+    final todayOnly = DateTime(now.year, now.month, now.day);
+    final firstOfThisMonth = DateTime(todayOnly.year, todayOnly.month, 1);
+
+    DateTime startDate = now;
+    if (r['startDate'] != null) {
+      try {
+        startDate = DateTime.parse(r['startDate']);
+      } catch (_) {}
+    }
+
+    final searchFrom = startDate.isAfter(firstOfThisMonth) ? startDate : firstOfThisMonth;
+
+    DateTime dueDateFor(int y, int m) {
+      final daysInMonth = DateTime(y, m + 1, 0).day;
+      return DateTime(y, m, day.clamp(1, daysInMonth));
+    }
+
+    var nextDue = dueDateFor(searchFrom.year, searchFrom.month);
+    if (nextDue.isBefore(searchFrom)) {
+      final nextMonth = searchFrom.month == 12 ? 1 : searchFrom.month + 1;
+      final nextYear = searchFrom.month == 12 ? searchFrom.year + 1 : searchFrom.year;
+      nextDue = dueDateFor(nextYear, nextMonth);
+    }
+    return nextDue;
+  }
+
+  void _confirmPayRecurring(dynamic item, BuildContext parentContext) {
+    final c = parentContext.c;
+    final title = item['title'] ?? '';
+    final amt = (item['amount'] as num?)?.toDouble() ?? 0.0;
+    final nextDue = _calculateNextDue(item);
+    final fmtDue = '${nextDue.day}/${nextDue.month}/${nextDue.year + 543}';
+
+    showDialog(
+      context: parentContext,
+      builder: (ctx) => Dialog(
+        backgroundColor: c.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: c.accentSoft,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(Icons.check_circle_rounded, color: c.accent, size: 30),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'ยืนยันการชำระเงิน',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: c.ink),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'ยืนยันว่าได้ชำระ "$title" จำนวน ฿${amt.toStringAsFixed(0)} (รอบวันที่ $fmtDue) แล้วใช่หรือไม่?',
+                style: TextStyle(fontSize: 13.5, color: c.ink3, height: 1.4),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: c.surface2,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.info_outline_rounded, size: 14, color: c.ink3),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'ระบบจะจดบันทึกเป็นรายจ่าย และขยับกำหนดชำระเป็นรอบถัดไป',
+                        style: TextStyle(fontSize: 11, color: c.ink3),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: AppModalButton(
+                      label: 'ยังไม่ได้จ่าย',
+                      onPressed: () => Navigator.pop(ctx),
+                      isPrimary: false,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: AppModalButton(
+                      label: 'ยืนยัน (จ่ายแล้ว)',
+                      onPressed: () async {
+                        Navigator.pop(ctx);
+                        await _executePayRecurring(item, parentContext);
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _executePayRecurring(dynamic item, BuildContext parentContext) async {
+    final userId = await UserSession.getUserId();
+    final id = item['id'].toString();
+    final title = item['title'] ?? '';
+    final amt = (item['amount'] as num?)?.toDouble() ?? 0.0;
+    final category = item['category'] ?? 'ค่าใช้จ่ายประจำ';
+    final isIndefinite = item['isIndefinite'] ?? true;
+    final dayOfMonthDue = (item['dayOfMonthDue'] as num?)?.toInt() ?? 1;
+    final endDate = item['endDate'] != null ? DateTime.parse(item['endDate']) : null;
+
+    final currentNextDue = _calculateNextDue(item);
+    final newStartDate = currentNextDue.add(const Duration(days: 1));
+
+    try {
+      // 1. จดใน รายจ่าย
+      await FinanceApiService.addTransaction(
+        userId,
+        amt,
+        false,
+        category,
+        'ชำระรายจ่ายประจำ: $title',
+      );
+
+      // 2. ขยับไป รายจ่ายประจำ อันถัดไป
+      await FinanceApiService.updateRecurring(
+        id,
+        userId,
+        title,
+        amt,
+        category,
+        newStartDate,
+        endDate,
+        isIndefinite,
+        dayOfMonthDue,
+      );
+
+      _fetchDashboardData(silent: true);
+      _loadBreakdown();
+      DataEventService.notifyDataChanged();
+
+      if (parentContext.mounted) {
+        final nextDueAfter = _calculateNextDue({
+          ...item,
+          'startDate': newStartDate.toIso8601String(),
+        });
+        final fmtNext = '${nextDueAfter.day}/${nextDueAfter.month}/${nextDueAfter.year + 543}';
+        ScaffoldMessenger.of(parentContext).showSnackBar(
+          SnackBar(
+            content: Text('บันทึกรายจ่าย ฿${amt.toStringAsFixed(0)} เรียบร้อยแล้ว (รอบถัดไป: $fmtNext)'),
+            backgroundColor: parentContext.c.accent,
+          ),
+        );
+      }
+    } catch (e) {
+      if (parentContext.mounted) {
+        ScaffoldMessenger.of(parentContext).showSnackBar(
+          SnackBar(content: Text('เกิดข้อผิดพลาด: ${e.toString().replaceAll("Exception: ", "")}')),
+        );
+      }
+    }
+  }
+
   Widget _buildRecurringExpensesSection(AppColors c) {
     if (_recurringExpenses.isEmpty) {
       return SectionCard(
@@ -959,19 +1137,7 @@ class _OverviewPageState extends State<OverviewPage> {
     int minDays = 999999;
 
     for (var r in _recurringExpenses) {
-      final day = (r['dayOfMonthDue'] as num?)?.toInt() ?? 1;
-      DateTime dueDateFor(int y, int m) {
-        final daysInMonth = DateTime(y, m + 1, 0).day;
-        return DateTime(y, m, day.clamp(1, daysInMonth));
-      }
-
-      var nextDue = dueDateFor(now.year, now.month);
-      if (nextDue.isBefore(todayOnly)) {
-        final nextMonth = now.month == 12 ? 1 : now.month + 1;
-        final nextYear = now.month == 12 ? now.year + 1 : now.year;
-        nextDue = dueDateFor(nextYear, nextMonth);
-      }
-
+      final nextDue = _calculateNextDue(r);
       final daysUntil = nextDue.difference(todayOnly).inDays;
       if (daysUntil < minDays) {
         minDays = daysUntil;
@@ -1015,9 +1181,11 @@ class _OverviewPageState extends State<OverviewPage> {
     final amt = (nearestItem['amount'] as num?)?.toDouble() ?? 0.0;
     final title = nearestItem['title'] ?? '';
 
-    final dueLabel = minDays == 0 ? 'ครบกำหนดวันนี้' : 'อีก $minDays วัน';
-    final Color dueFg = minDays == 0 ? c.coral : (minDays <= 3 ? c.amber : c.ink3);
-    final Color dueBg = minDays == 0 ? c.coralSoft : (minDays <= 3 ? c.amberSoft : c.surface2);
+    final dueLabel = minDays == 0
+        ? 'ครบกำหนดวันนี้'
+        : (minDays < 0 ? 'เลยกำหนด ${minDays.abs()} วัน' : 'อีก $minDays วัน');
+    final Color dueFg = minDays <= 0 ? c.coral : (minDays <= 3 ? c.amber : c.ink3);
+    final Color dueBg = minDays <= 0 ? c.coralSoft : (minDays <= 3 ? c.amberSoft : c.surface2);
 
     return SectionCard(
       title: 'รายจ่ายประจำใกล้ที่สุด',
@@ -1037,14 +1205,14 @@ class _OverviewPageState extends State<OverviewPage> {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: minDays == 0 ? [c.coral, c.amber] : [c.amber, c.accent],
+                  colors: minDays <= 0 ? [c.coral, c.amber] : [c.amber, c.accent],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [
                   BoxShadow(
-                    color: (minDays == 0 ? c.coral : c.amber).withValues(alpha: 0.3),
+                    color: (minDays <= 0 ? c.coral : c.amber).withValues(alpha: 0.3),
                     blurRadius: 8,
                     offset: const Offset(0, 3),
                   ),
@@ -1110,6 +1278,29 @@ class _OverviewPageState extends State<OverviewPage> {
                     fontWeight: FontWeight.w900,
                     fontSize: 18,
                     color: c.ink,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                GestureDetector(
+                  onTap: () => _confirmPayRecurring(nearestItem, context),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: c.accentSoft,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: c.accent.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.check_circle_rounded, size: 14, color: c.accent),
+                        const SizedBox(width: 4),
+                        Text(
+                          'จ่ายแล้ว',
+                          style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: c.accent),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
