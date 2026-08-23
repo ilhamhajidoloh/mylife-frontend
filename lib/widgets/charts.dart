@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import 'dart:math' as math;
 
 class Sparkline extends StatelessWidget {
   final List<double> points;
@@ -614,3 +615,208 @@ class HabitDot extends StatelessWidget {
     );
   }
 }
+
+/// Pie Chart for Category Breakdown
+class PieChart extends StatelessWidget {
+  final List<PieChartData> data;
+  final double size;
+
+  const PieChart({
+    super.key,
+    required this.data,
+    this.size = 200,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (data.isEmpty) return const SizedBox.shrink();
+
+    final total = data.fold<double>(0, (sum, item) => sum + item.value);
+    if (total <= 0) return const SizedBox.shrink();
+
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(
+        painter: _PieChartPainter(data, total),
+      ),
+    );
+  }
+}
+
+class PieChartData {
+  final String label;
+  final double value;
+  final Color color;
+
+  const PieChartData({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+}
+
+class _PieChartPainter extends CustomPainter {
+  final List<PieChartData> data;
+  final double total;
+
+  _PieChartPainter(this.data, this.total);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = math.min(size.width, size.height) / 2;
+
+    double startAngle = -math.pi / 2; // Start from top
+
+    for (final item in data) {
+      final sweepAngle = (item.value / total) * 2 * math.pi;
+
+      final paint = Paint()
+        ..color = item.color
+        ..style = PaintingStyle.fill;
+
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: radius),
+        startAngle,
+        sweepAngle,
+        true,
+        paint,
+      );
+
+      // Draw border
+      final borderPaint = Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2;
+
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: radius),
+        startAngle,
+        sweepAngle,
+        true,
+        borderPaint,
+      );
+
+      startAngle += sweepAngle;
+    }
+
+    // Draw center hole for donut effect
+    final holePaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+
+    canvas.drawCircle(center, radius * 0.5, holePaint);
+  }
+
+  @override
+  bool shouldRepaint(_PieChartPainter old) => old.data != data || old.total != total;
+}
+
+/// Monthly Comparison Bar Chart
+class MonthlyComparisonChart extends StatelessWidget {
+  final List<MonthlyData> data;
+  final double height;
+
+  const MonthlyComparisonChart({
+    super.key,
+    required this.data,
+    this.height = 200,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.c;
+
+    if (data.isEmpty) {
+      return SizedBox(
+        height: height,
+        child: Center(
+          child: Text('ไม่มีข้อมูล', style: TextStyle(color: c.ink3)),
+        ),
+      );
+    }
+
+    final maxValue = data.fold<double>(
+      0,
+      (max, item) => math.max(max, math.max(item.income, item.expense)),
+    );
+
+    return SizedBox(
+      height: height + 40,
+      child: Column(
+        children: [
+          Expanded(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: data.map((item) {
+                return Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        // Income bar
+                        Container(
+                          width: double.infinity,
+                          height: maxValue > 0 ? (item.income / maxValue) * (height - 20) : 0,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [c.good, c.good.withOpacity(0.7)],
+                            ),
+                            borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        // Expense bar
+                        Container(
+                          width: double.infinity,
+                          height: maxValue > 0 ? (item.expense / maxValue) * (height - 20) : 0,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [c.coral, c.coral.withOpacity(0.7)],
+                            ),
+                            borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: data.map((item) {
+              return Expanded(
+                child: Text(
+                  item.label,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 10, color: c.ink3, fontWeight: FontWeight.w500),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class MonthlyData {
+  final String label;
+  final double income;
+  final double expense;
+
+  const MonthlyData({
+    required this.label,
+    required this.income,
+    required this.expense,
+  });
+}
+

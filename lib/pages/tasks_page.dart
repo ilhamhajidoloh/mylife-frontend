@@ -21,11 +21,38 @@ class _TasksPageState extends State<TasksPage> {
   List<dynamic> _tasks = [];
   List<dynamic> _urgentTasks = [];
 
+  // Filtering
+  String _statusFilter = 'all'; // 'all', 'pending', 'completed'
+  String _priorityFilter = 'all'; // 'all', 'urgent', 'normal'
+
   @override
   void initState() {
     super.initState();
     _loadTasks();
   }
+
+  List<dynamic> get _filteredTasks {
+    var filtered = List<dynamic>.from(_tasks);
+
+    // Filter by status
+    if (_statusFilter == 'pending') {
+      filtered = filtered.where((task) => task['isCompleted'] != true).toList();
+    } else if (_statusFilter == 'completed') {
+      filtered = filtered.where((task) => task['isCompleted'] == true).toList();
+    }
+
+    // Filter by priority
+    if (_priorityFilter == 'urgent') {
+      filtered = filtered.where((task) => task['isUrgent'] == true || task['priority'] == 'high').toList();
+    } else if (_priorityFilter == 'normal') {
+      filtered = filtered.where((task) => task['isUrgent'] != true && task['priority'] != 'high').toList();
+    }
+
+    return filtered;
+  }
+
+  int get _pendingCount => _tasks.where((task) => task['isCompleted'] != true).length;
+  int get _urgentCount => _tasks.where((task) => task['isUrgent'] == true || task['priority'] == 'high').length;
 
   Future<void> _loadTasks() async {
     final userId = await UserSession.getUserId();
@@ -325,7 +352,61 @@ class _TasksPageState extends State<TasksPage> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
           children: [
-            const PageHeader(title: 'งาน & การบ้าน', subtitle: 'จัดการงานและกำหนดส่ง'),
+            PageHeader(
+              title: 'งาน & การบ้าน',
+              subtitle: 'ค้างส่ง $_pendingCount รายการ • งานด่วน $_urgentCount รายการ',
+            ),
+            const SizedBox(height: 16),
+
+            // Filter Section
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: c.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: c.border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('สถานะ', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: c.ink3)),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      _buildFilterChip('ทั้งหมด', _statusFilter == 'all', () {
+                        setState(() => _statusFilter = 'all');
+                      }),
+                      const SizedBox(width: 8),
+                      _buildFilterChip('ค้างส่ง', _statusFilter == 'pending', () {
+                        setState(() => _statusFilter = 'pending');
+                      }),
+                      const SizedBox(width: 8),
+                      _buildFilterChip('เสร็จแล้ว', _statusFilter == 'completed', () {
+                        setState(() => _statusFilter = 'completed');
+                      }),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text('ความสำคัญ', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: c.ink3)),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      _buildFilterChip('ทั้งหมด', _priorityFilter == 'all', () {
+                        setState(() => _priorityFilter = 'all');
+                      }),
+                      const SizedBox(width: 8),
+                      _buildFilterChip('🔥 ด่วน', _priorityFilter == 'urgent', () {
+                        setState(() => _priorityFilter = 'urgent');
+                      }, isUrgent: true),
+                      const SizedBox(width: 8),
+                      _buildFilterChip('ปกติ', _priorityFilter == 'normal', () {
+                        setState(() => _priorityFilter = 'normal');
+                      }),
+                    ],
+                  ),
+                ],
+              ),
+            ),
             const SizedBox(height: 16),
 
             if (_isLoading) ...[
@@ -401,11 +482,11 @@ class _TasksPageState extends State<TasksPage> {
               // All Tasks
               SectionCard(
                 title: 'งานทั้งหมด',
-                caption: '${_tasks.length} งาน',
-                child: _tasks.isNotEmpty
+                caption: '${_filteredTasks.length} งาน',
+                child: _filteredTasks.isNotEmpty
                     ? Column(
                         children: [
-                          for (var task in _tasks)
+                          for (var task in _filteredTasks)
                             Container(
                               margin: const EdgeInsets.only(bottom: 6),
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -494,6 +575,33 @@ class _TasksPageState extends State<TasksPage> {
               ),
             ],
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterChip(String label, bool isSelected, VoidCallback onTap, {bool isUrgent = false}) {
+    final c = context.c;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? c.accent : c.surface2,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected ? c.accent : c.border,
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+            color: isSelected ? Colors.white : (isUrgent ? c.coral : c.ink2),
+          ),
         ),
       ),
     );

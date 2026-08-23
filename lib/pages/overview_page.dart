@@ -11,7 +11,6 @@ import '../services/logger.dart';
 import '../services/data_event_service.dart';
 import 'profile_page.dart';
 
-
 class OverviewPage extends StatefulWidget {
   const OverviewPage({super.key});
 
@@ -19,7 +18,8 @@ class OverviewPage extends StatefulWidget {
   State<OverviewPage> createState() => _OverviewPageState();
 }
 
-class _OverviewPageState extends State<OverviewPage> {
+class _OverviewPageState extends State<OverviewPage>
+    with WidgetsBindingObserver {
   bool _isLoading = true;
   String _userName = 'ผู้ใช้งาน';
   double _netBalance = 0.0;
@@ -46,9 +46,35 @@ class _OverviewPageState extends State<OverviewPage> {
   Duration _currentClassRemaining = Duration.zero;
   Duration _nextClassCountdown = Duration.zero;
 
+  int _blinkTrigger = 0;
+
+  void _updateNextEventCountdown() {
+    if (_activityTimeline != null &&
+        _activityTimeline!['next'] != null &&
+        _activityTimeline!['next']['startTime'] != null) {
+      final startTimeStr = _activityTimeline!['next']['startTime'].toString();
+      final targetDate = DateTime.tryParse(startTimeStr)?.toLocal();
+      if (targetDate != null) {
+        final diff = targetDate.difference(DateTime.now());
+        _nextEventCountdown = diff.isNegative ? Duration.zero : diff;
+        return;
+      }
+    }
+    if (_activityTimeline != null &&
+        _activityTimeline!['countdownSeconds'] != null) {
+      final sec =
+          num.tryParse(
+            _activityTimeline!['countdownSeconds'].toString(),
+          )?.toInt() ??
+          0;
+      _nextEventCountdown = Duration(seconds: sec > 0 ? sec : 0);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _fetchDashboardData();
     _loadBreakdown();
 
@@ -68,7 +94,11 @@ class _OverviewPageState extends State<OverviewPage> {
     _timer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) return;
       setState(() {
-        if (_nextEventCountdown.inSeconds > 0) {
+        if (_activityTimeline != null &&
+            _activityTimeline!['next'] != null &&
+            _activityTimeline!['next']['startTime'] != null) {
+          _updateNextEventCountdown();
+        } else if (_nextEventCountdown.inSeconds > 0) {
           _nextEventCountdown -= const Duration(seconds: 1);
         }
         _calcClassCountdowns();
@@ -77,7 +107,19 @@ class _OverviewPageState extends State<OverviewPage> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      if (mounted) {
+        setState(() {
+          _blinkTrigger++;
+        });
+      }
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _timer.cancel();
     _autoRefreshTimer?.cancel();
     _dataSubscription?.cancel();
@@ -103,30 +145,57 @@ class _OverviewPageState extends State<OverviewPage> {
 
     // 1. โหลดข้อมูลจาก Cache ทันทีเพื่อให้แสดงผลได้ทันทีโดยไม่ต้องรอ API (Stale-While-Revalidate)
     if (!silent) {
-      final cachedFinance = await CacheService.get(userId, CacheService.financeSummary);
+      final cachedFinance = await CacheService.get(
+        userId,
+        CacheService.financeSummary,
+      );
       if (cachedFinance != null) {
         _netBalance = (cachedFinance['netBalance'] as num?)?.toDouble() ?? 0.0;
-        _totalIncome = (cachedFinance['totalIncome'] as num?)?.toDouble() ?? 0.0;
-        _totalExpense = (cachedFinance['totalExpense'] as num?)?.toDouble() ?? 0.0;
+        _totalIncome =
+            (cachedFinance['totalIncome'] as num?)?.toDouble() ?? 0.0;
+        _totalExpense =
+            (cachedFinance['totalExpense'] as num?)?.toDouble() ?? 0.0;
       }
-      final cachedClasses = await CacheService.get(userId, CacheService.scheduleTodayClasses);
+      final cachedClasses = await CacheService.get(
+        userId,
+        CacheService.scheduleTodayClasses,
+      );
       if (cachedClasses != null && cachedClasses is Map<String, dynamic>) {
         _todayClasses = _processTodayClasses(cachedClasses);
       }
-      final cachedActivity = await CacheService.get(userId, CacheService.activityTimeline);
-      if (cachedActivity != null) _activityTimeline = cachedActivity;
+      final cachedActivity = await CacheService.get(
+        userId,
+        CacheService.activityTimeline,
+      );
+      if (cachedActivity != null) {
+        _activityTimeline = cachedActivity;
+        _updateNextEventCountdown();
+      }
 
-      final cachedTodo = await CacheService.get(userId, CacheService.todoDailyCompletion);
+      final cachedTodo = await CacheService.get(
+        userId,
+        CacheService.todoDailyCompletion,
+      );
       if (cachedTodo != null) _todoDaily = cachedTodo;
 
-      final cachedTasks = await CacheService.get(userId, CacheService.taskUrgent);
+      final cachedTasks = await CacheService.get(
+        userId,
+        CacheService.taskUrgent,
+      );
       if (cachedTasks != null) _urgentTasks = cachedTasks;
 
-      final cachedRecurring = await CacheService.get(userId, CacheService.financeRecurring);
-      if (cachedRecurring != null && cachedRecurring is List) _recurringExpenses = cachedRecurring;
+      final cachedRecurring = await CacheService.get(
+        userId,
+        CacheService.financeRecurring,
+      );
+      if (cachedRecurring != null && cachedRecurring is List) {
+        _recurringExpenses = cachedRecurring;
+      }
 
       // หากมีข้อมูลแคชอยู่แล้ว ปิดสถานะ _isLoading ทันที
-      if (cachedFinance != null || cachedClasses != null || cachedTasks != null) {
+      if (cachedFinance != null ||
+          cachedClasses != null ||
+          cachedTasks != null) {
         if (mounted) setState(() => _isLoading = false);
       } else {
         if (mounted) setState(() => _isLoading = true);
@@ -137,25 +206,43 @@ class _OverviewPageState extends State<OverviewPage> {
       final financeSummary = await FinanceApiService.getSummary(userId);
       if (financeSummary != null) {
         _netBalance = (financeSummary['netBalance'] as num?)?.toDouble() ?? 0.0;
-        _totalIncome = (financeSummary['totalIncome'] as num?)?.toDouble() ?? 0.0;
-        _totalExpense = (financeSummary['totalExpense'] as num?)?.toDouble() ?? 0.0;
-        await CacheService.save(userId, CacheService.financeSummary, financeSummary);
+        _totalIncome =
+            (financeSummary['totalIncome'] as num?)?.toDouble() ?? 0.0;
+        _totalExpense =
+            (financeSummary['totalExpense'] as num?)?.toDouble() ?? 0.0;
+        await CacheService.save(
+          userId,
+          CacheService.financeSummary,
+          financeSummary,
+        );
       }
 
       final todayRes = await ScheduleApiService.getTodayClasses(userId);
       if (todayRes != null && todayRes is Map<String, dynamic>) {
         _todayClasses = _processTodayClasses(todayRes);
-        await CacheService.save(userId, CacheService.scheduleTodayClasses, _todayClasses);
+        await CacheService.save(
+          userId,
+          CacheService.scheduleTodayClasses,
+          _todayClasses,
+        );
       }
 
       _activityTimeline = await ActivityApiService.getTimeline(userId);
       if (_activityTimeline != null) {
-        await CacheService.save(userId, CacheService.activityTimeline, _activityTimeline);
+        await CacheService.save(
+          userId,
+          CacheService.activityTimeline,
+          _activityTimeline,
+        );
       }
 
       _todoDaily = await TodoApiService.getDailyCompletion(userId);
       if (_todoDaily != null) {
-        await CacheService.save(userId, CacheService.todoDailyCompletion, _todoDaily);
+        await CacheService.save(
+          userId,
+          CacheService.todoDailyCompletion,
+          _todoDaily,
+        );
       }
 
       final urgentTasks = await TaskApiService.getUrgentTasks(userId);
@@ -167,13 +254,14 @@ class _OverviewPageState extends State<OverviewPage> {
       final recurringList = await FinanceApiService.getRecurring(userId);
       if (recurringList != null && recurringList is List) {
         _recurringExpenses = recurringList;
-        await CacheService.save(userId, CacheService.financeRecurring, _recurringExpenses);
+        await CacheService.save(
+          userId,
+          CacheService.financeRecurring,
+          _recurringExpenses,
+        );
       }
 
-      if (_activityTimeline != null && _activityTimeline!['countdownSeconds'] != null) {
-        final sec = (_activityTimeline!['countdownSeconds'] as num).toInt();
-        _nextEventCountdown = Duration(seconds: sec > 0 ? sec : 0);
-      }
+      _updateNextEventCountdown();
     } catch (e, st) {
       Logger.catchBlock('OverviewPage', 'fetchDashboardData', e, st);
     } finally {
@@ -247,8 +335,12 @@ class _OverviewPageState extends State<OverviewPage> {
       final endStr = c['endTime']?.toString() ?? '00:00';
       final startParts = startStr.split(':');
       final endParts = endStr.split(':');
-      final startMin = (int.tryParse(startParts[0]) ?? 0) * 60 + (int.tryParse(startParts[1]) ?? 0);
-      final endMin = (int.tryParse(endParts[0]) ?? 0) * 60 + (int.tryParse(endParts[1]) ?? 0);
+      final startMin =
+          (int.tryParse(startParts[0]) ?? 0) * 60 +
+          (int.tryParse(startParts[1]) ?? 0);
+      final endMin =
+          (int.tryParse(endParts[0]) ?? 0) * 60 +
+          (int.tryParse(endParts[1]) ?? 0);
 
       if (endMin <= currentMinutes) {
         previous = c;
@@ -257,7 +349,8 @@ class _OverviewPageState extends State<OverviewPage> {
         currentList.add(c);
       } else if (startMin > currentMinutes) {
         // collect all classes starting at the earliest upcoming time
-        if (earliestNextStart == null || startStr.compareTo(earliestNextStart) < 0) {
+        if (earliestNextStart == null ||
+            startStr.compareTo(earliestNextStart) < 0) {
           earliestNextStart = startStr;
           nextList = [c];
         } else if (startStr == earliestNextStart) {
@@ -283,13 +376,16 @@ class _OverviewPageState extends State<OverviewPage> {
 
     // Use currentList — pick the one ending soonest for the countdown display
     final currentList = (_todayClasses?['currentList'] as List?);
-    final currentFirst = currentList != null && currentList.isNotEmpty ? currentList.first : null;
+    final currentFirst = currentList != null && currentList.isNotEmpty
+        ? currentList.first
+        : null;
     final next = _todayClasses?['next'];
 
     if (currentFirst != null) {
       final endStr = currentFirst['endTime']?.toString() ?? '00:00';
       final parts = endStr.split(':');
-      final endMin = (int.tryParse(parts[0]) ?? 0) * 60 + (int.tryParse(parts[1]) ?? 0);
+      final endMin =
+          (int.tryParse(parts[0]) ?? 0) * 60 + (int.tryParse(parts[1]) ?? 0);
       final remaining = endMin - currentMinutes;
       _currentClassRemaining = remaining > 0
           ? Duration(seconds: (remaining * 60).round())
@@ -301,7 +397,8 @@ class _OverviewPageState extends State<OverviewPage> {
     if (next != null) {
       final startStr = next['startTime']?.toString() ?? '00:00';
       final parts = startStr.split(':');
-      final startMin = (int.tryParse(parts[0]) ?? 0) * 60 + (int.tryParse(parts[1]) ?? 0);
+      final startMin =
+          (int.tryParse(parts[0]) ?? 0) * 60 + (int.tryParse(parts[1]) ?? 0);
       final diffMin = startMin - currentMinutes;
       _nextClassCountdown = diffMin > 0
           ? Duration(seconds: (diffMin * 60).round())
@@ -351,7 +448,9 @@ class _OverviewPageState extends State<OverviewPage> {
               valueListenable: ApiClient.isConnectingLong,
               builder: (context, isLong, child) {
                 return ServerConnectingWidget(
-                  message: isLong ? 'กำลังปลุกเซิร์ฟเวอร์ (Render Cold Start)...' : 'กำลังดึงข้อมูลล่าสุด...',
+                  message: isLong
+                      ? 'กำลังปลุกเซิร์ฟเวอร์ (Render Cold Start)...'
+                      : 'กำลังดึงข้อมูลล่าสุด...',
                   subMessage: isLong
                       ? 'เซิร์ฟเวอร์กำลังสตาร์ทขึ้นมาใหม่เนื่องจากไม่ได้ใช้งานเป็นเวลานาน โปรดรอประมาณ 20-40 วินาที...'
                       : 'โปรดรอสักครู่ ระบบกำลังจัดเตรียมข้อมูลของคุณ...',
@@ -362,8 +461,7 @@ class _OverviewPageState extends State<OverviewPage> {
             const SkeletonCard(height: 140, borderRadius: 24),
             const SizedBox(height: 16),
             const SkeletonCard(height: 100, borderRadius: 20),
-          ]
-          else ...[
+          ] else ...[
             // Hero Balance Card
             Container(
               width: double.infinity,
@@ -386,29 +484,39 @@ class _OverviewPageState extends State<OverviewPage> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Expanded(
-                        child: Text('${_greeting()}, $_userName',
-                            style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.9),
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600),
-                            overflow: TextOverflow.ellipsis),
+                        child: Text(
+                          '${_greeting()}, $_userName',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.9),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                       Row(
                         children: [
                           IconButton(
-                            icon: const Icon(Icons.notifications_outlined, color: Colors.white),
+                            icon: const Icon(
+                              Icons.notifications_outlined,
+                              color: Colors.white,
+                            ),
                             tooltip: 'การแจ้งเตือนจากระบบ',
                             onPressed: _showNotificationCenter,
                           ),
                           IconButton(
-                            icon: const Icon(Icons.settings_outlined, color: Colors.white),
+                            icon: const Icon(
+                              Icons.settings_outlined,
+                              color: Colors.white,
+                            ),
                             tooltip: 'ตั้งค่าโปรไฟล์ & การเชื่อมต่อ',
                             onPressed: () {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) => ProfilePage(
-                                    onProfileUpdated: () => _fetchDashboardData(silent: true),
+                                    onProfileUpdated: () =>
+                                        _fetchDashboardData(silent: true),
                                   ),
                                 ),
                               );
@@ -419,21 +527,38 @@ class _OverviewPageState extends State<OverviewPage> {
                     ],
                   ),
                   const SizedBox(height: 20),
-                  Text('ยอดเงินคงเหลือ',
-                      style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 13, fontWeight: FontWeight.w500)),
+                  Text(
+                    'ยอดเงินคงเหลือ',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.8),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                   const SizedBox(height: 4),
-                  Text('฿${_netBalance.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 36,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -1)),
+                  Text(
+                    '฿${_netBalance.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 36,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -1,
+                    ),
+                  ),
                   const SizedBox(height: 16),
                   Row(
                     children: [
-                      _heroStat('รายรับ', '+฿${_totalIncome.toStringAsFixed(0)}', Icons.arrow_upward_rounded),
+                      _heroStat(
+                        'รายรับ',
+                        '+฿${_totalIncome.toStringAsFixed(0)}',
+                        Icons.arrow_upward_rounded,
+                      ),
                       const SizedBox(width: 16),
-                      _heroStat('รายจ่าย', '-฿${_totalExpense.toStringAsFixed(0)}', Icons.arrow_downward_rounded),
+                      _heroStat(
+                        'รายจ่าย',
+                        '-฿${_totalExpense.toStringAsFixed(0)}',
+                        Icons.arrow_downward_rounded,
+                      ),
                     ],
                   ),
                 ],
@@ -444,17 +569,45 @@ class _OverviewPageState extends State<OverviewPage> {
             // Quick Stats Row
             Row(
               children: [
-                Expanded(child: _quickStat(c.accent, Icons.school_rounded, 'วิชาเรียน', _todayClasses?['current']?['courseName'] ?? '-',)),
+                Expanded(
+                  child: _quickStat(
+                    c.accent,
+                    Icons.school_rounded,
+                    'วิชาเรียน',
+                    _todayClasses?['current']?['courseName'] ?? '-',
+                  ),
+                ),
                 const SizedBox(width: 12),
-                Expanded(child: _quickStat(c.violet, Icons.timer_rounded, 'ถัดไป', _formatTimer(_nextEventCountdown))),
+                Expanded(
+                  child: _quickStat(
+                    c.violet,
+                    Icons.timer_rounded,
+                    'ถัดไป',
+                    _formatTimer(_nextEventCountdown),
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 12),
             Row(
               children: [
-                Expanded(child: _quickStat(c.good, Icons.check_circle_rounded, 'Todolist', '${((_todoDaily?['percentage'] as num?) ?? 0).toStringAsFixed(0)}%')),
+                Expanded(
+                  child: _quickStat(
+                    c.good,
+                    Icons.check_circle_rounded,
+                    'Todolist',
+                    '${((_todoDaily?['percentage'] as num?) ?? 0).toStringAsFixed(0)}%',
+                  ),
+                ),
                 const SizedBox(width: 12),
-                Expanded(child: _quickStat(c.coral, Icons.priority_high_rounded, 'งานด่วน', '${_urgentTasks.length} รายการ')),
+                Expanded(
+                  child: _quickStat(
+                    c.coral,
+                    Icons.priority_high_rounded,
+                    'งานด่วน',
+                    '${_urgentTasks.length} รายการ',
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 20),
@@ -470,23 +623,31 @@ class _OverviewPageState extends State<OverviewPage> {
             // Today's Classes
             SectionCard(
               title: 'วิชาเรียนวันนี้',
-              caption: (_todayClasses?['termName'] != null && _todayClasses!['termName'].toString().isNotEmpty)
-                  ? (_todayClasses!['termName'].toString().startsWith('ภาคเรียน')
-                      ? '${_todayClasses!['termName']}'
-                      : 'ภาคเรียน: ${_todayClasses!['termName']}')
+              caption:
+                  (_todayClasses?['termName'] != null &&
+                      _todayClasses!['termName'].toString().isNotEmpty)
+                  ? (_todayClasses!['termName'].toString().startsWith(
+                          'ภาคเรียน',
+                        )
+                        ? '${_todayClasses!['termName']}'
+                        : 'ภาคเรียน: ${_todayClasses!['termName']}')
                   : 'อัพเดทล่าสุด',
               child: Column(
                 children: [
                   _classStatusTile(
                     'ก่อนหน้า',
-                    _todayClasses?['previous']?['courseName'] ?? 'ไม่มีวิชาก่อนหน้า',
-                    _todayClasses?['previous'] != null ? '${_todayClasses!['previous']['startTime']} - ${_todayClasses!['previous']['endTime']}' : '-',
+                    _todayClasses?['previous']?['courseName'] ??
+                        'ไม่มีวิชาก่อนหน้า',
+                    _todayClasses?['previous'] != null
+                        ? '${_todayClasses!['previous']['startTime']} - ${_todayClasses!['previous']['endTime']}'
+                        : '-',
                     c.ink3,
                   ),
 
                   // Current classes — could be multiple (overlapping)
                   ...() {
-                    final currentList = (_todayClasses?['currentList'] as List?) ?? [];
+                    final currentList =
+                        (_todayClasses?['currentList'] as List?) ?? [];
                     if (currentList.isEmpty) {
                       return [
                         _classStatusTile(
@@ -509,7 +670,11 @@ class _OverviewPageState extends State<OverviewPage> {
                         cls['courseName'] ?? '',
                         '${cls['startTime']} - ${cls['endTime']}',
                         c.accent,
+                        key: ValueKey(
+                          'overview-current-${cls['id'] ?? cls['courseId'] ?? cls['courseName'] ?? idx}-${cls['startTime']}',
+                        ),
                         isHighlight: true,
+                        shouldBlink: true,
                         countdown: idx == 0 ? _currentClassRemaining : null,
                         countdownLabel: 'เหลือ',
                       );
@@ -518,7 +683,8 @@ class _OverviewPageState extends State<OverviewPage> {
 
                   // Next classes — could be multiple (same start time)
                   ...() {
-                    final nextList = (_todayClasses?['nextList'] as List?) ?? [];
+                    final nextList =
+                        (_todayClasses?['nextList'] as List?) ?? [];
                     if (nextList.isEmpty) {
                       return [
                         _classStatusTile(
@@ -529,6 +695,9 @@ class _OverviewPageState extends State<OverviewPage> {
                         ),
                       ];
                     }
+                    final shouldBlinkNext =
+                        ((_todayClasses?['currentList'] as List?) ?? [])
+                            .isEmpty;
                     return nextList.asMap().entries.map((entry) {
                       final idx = entry.key;
                       final cls = entry.value;
@@ -540,6 +709,10 @@ class _OverviewPageState extends State<OverviewPage> {
                         cls['courseName'] ?? '',
                         '${cls['startTime']} - ${cls['endTime']}',
                         c.blue,
+                        key: ValueKey(
+                          'overview-next-${cls['id'] ?? cls['courseId'] ?? cls['courseName'] ?? idx}-${cls['startTime']}',
+                        ),
+                        shouldBlink: shouldBlinkNext,
                         countdown: idx == 0 ? _nextClassCountdown : null,
                         countdownLabel: 'อีก',
                       );
@@ -564,9 +737,22 @@ class _OverviewPageState extends State<OverviewPage> {
                     ),
                     child: Column(
                       children: [
-                        Text(_formatTimer(_nextEventCountdown),
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1)),
-                        Text('นับถอยหลัง', style: TextStyle(fontSize: 11, color: Colors.white.withValues(alpha: 0.8))),
+                        Text(
+                          _formatTimer(_nextEventCountdown),
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.white,
+                            letterSpacing: 1,
+                          ),
+                        ),
+                        Text(
+                          'นับถอยหลัง',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.white.withValues(alpha: 0.8),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -576,15 +762,23 @@ class _OverviewPageState extends State<OverviewPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          _activityTimeline?['next']?['title'] ?? 'ไม่มีกิจกรรมถัดไป',
-                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
+                          _activityTimeline?['next']?['title'] ??
+                              'ไม่มีกิจกรรมถัดไป',
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           _activityTimeline?['next']?['location'] != null
                               ? _activityTimeline!['next']['location']
                               : 'ไม่มีข้อมูลสถานที่',
-                          style: TextStyle(fontSize: 12.5, color: Colors.white.withValues(alpha: 0.8)),
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            color: Colors.white.withValues(alpha: 0.8),
+                          ),
                         ),
                       ],
                     ),
@@ -597,32 +791,40 @@ class _OverviewPageState extends State<OverviewPage> {
             // Todolist Progress
             SectionCard(
               title: 'Todolist วันนี้',
-              caption: 'เสร็จสิ้น ${((_todoDaily?['percentage'] as num?) ?? 0).toStringAsFixed(0)}%',
+              caption:
+                  'เสร็จสิ้น ${((_todoDaily?['percentage'] as num?) ?? 0).toStringAsFixed(0)}%',
               child: Column(
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(20),
                     child: LinearProgressIndicator(
-                      value: (((_todoDaily?['percentage'] as num?) ?? 0) / 100.0).clamp(0.0, 1.0),
+                      value:
+                          (((_todoDaily?['percentage'] as num?) ?? 0) / 100.0)
+                              .clamp(0.0, 1.0),
                       backgroundColor: c.surface2,
                       valueColor: AlwaysStoppedAnimation(c.accent),
                       minHeight: 10,
                     ),
                   ),
                   const SizedBox(height: 12),
-                  if (_todoDaily?['todos'] != null && (_todoDaily!['todos'] as List).isNotEmpty)
+                  if (_todoDaily?['todos'] != null &&
+                      (_todoDaily!['todos'] as List).isNotEmpty)
                     for (var t in (_todoDaily!['todos'] as List).take(3))
                       Container(
                         margin: const EdgeInsets.only(bottom: 6),
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: t['isCompleted'] == true ? c.good.withValues(alpha: 0.08) : c.surface2,
+                          color: t['isCompleted'] == true
+                              ? c.good.withValues(alpha: 0.08)
+                              : c.surface2,
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Row(
                           children: [
                             Icon(
-                              t['isCompleted'] == true ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
+                              t['isCompleted'] == true
+                                  ? Icons.check_circle_rounded
+                                  : Icons.radio_button_unchecked,
                               color: t['isCompleted'] == true ? c.good : c.ink3,
                               size: 22,
                             ),
@@ -633,8 +835,12 @@ class _OverviewPageState extends State<OverviewPage> {
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,
-                                  decoration: t['isCompleted'] == true ? TextDecoration.lineThrough : null,
-                                  color: t['isCompleted'] == true ? c.ink3 : c.ink,
+                                  decoration: t['isCompleted'] == true
+                                      ? TextDecoration.lineThrough
+                                      : null,
+                                  color: t['isCompleted'] == true
+                                      ? c.ink3
+                                      : c.ink,
                                 ),
                               ),
                             ),
@@ -644,7 +850,10 @@ class _OverviewPageState extends State<OverviewPage> {
                   else
                     Padding(
                       padding: const EdgeInsets.all(16.0),
-                      child: Text('ไม่มีรายการวันนี้', style: TextStyle(color: c.ink3, fontSize: 13)),
+                      child: Text(
+                        'ไม่มีรายการวันนี้',
+                        style: TextStyle(color: c.ink3, fontSize: 13),
+                      ),
                     ),
                 ],
               ),
@@ -675,15 +884,34 @@ class _OverviewPageState extends State<OverviewPage> {
                                 color: Colors.white.withValues(alpha: 0.2),
                                 borderRadius: BorderRadius.circular(10),
                               ),
-                              child: const Icon(Icons.warning_rounded, color: Colors.white, size: 20),
+                              child: const Icon(
+                                Icons.warning_rounded,
+                                color: Colors.white,
+                                size: 20,
+                              ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(task['title'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 14)),
-                                  Text('กำหนดส่ง: ${task['deadline'] ?? '-'}', style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 12)),
+                                  Text(
+                                    task['title'] ?? '',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  Text(
+                                    'กำหนดส่ง: ${task['deadline'] ?? '-'}',
+                                    style: TextStyle(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.8,
+                                      ),
+                                      fontSize: 12,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
@@ -714,8 +942,21 @@ class _OverviewPageState extends State<OverviewPage> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 11)),
-                Text(value, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700)),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.8),
+                    fontSize: 11,
+                  ),
+                ),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ],
             ),
           ],
@@ -749,11 +990,24 @@ class _OverviewPageState extends State<OverviewPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: c.ink3)),
-                Text(value,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.ink)),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: c.ink3,
+                  ),
+                ),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: c.ink,
+                  ),
+                ),
               ],
             ),
           ),
@@ -767,7 +1021,9 @@ class _OverviewPageState extends State<OverviewPage> {
     String title,
     String subtitle,
     Color color, {
+    Key? key,
     bool isHighlight = false,
+    bool shouldBlink = false,
     Duration? countdown,
     String? countdownLabel,
   }) {
@@ -775,61 +1031,19 @@ class _OverviewPageState extends State<OverviewPage> {
     final hasCountdown = countdown != null && countdown.inSeconds > 0;
     final countdownText = hasCountdown ? _formatCountdown(countdown) : null;
 
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-      margin: const EdgeInsets.only(bottom: 4),
-      decoration: BoxDecoration(
-        color: isHighlight ? color.withValues(alpha: 0.08) : Colors.transparent,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(tag, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color)),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: c.ink)),
-                Text(subtitle, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: c.ink3)),
-              ],
-            ),
-          ),
-          if (countdownText != null) ...
-            [
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.13),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: color.withValues(alpha: 0.25), width: 1),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      countdownLabel ?? '',
-                      style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: color.withValues(alpha: 0.7)),
-                    ),
-                    Text(
-                      countdownText,
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: color),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-        ],
-      ),
+    return _BlinkingClassStatusTile(
+      key: key,
+      tag: tag,
+      title: title,
+      subtitle: subtitle,
+      color: color,
+      normalTitleColor: c.ink,
+      normalSubtitleColor: c.ink3,
+      isHighlight: isHighlight,
+      shouldBlink: shouldBlink,
+      countdownText: countdownText,
+      countdownLabel: countdownLabel,
+      blinkTrigger: _blinkTrigger,
     );
   }
 
@@ -841,13 +1055,18 @@ class _OverviewPageState extends State<OverviewPage> {
     ];
 
     final labels = _breakdownData.map((e) => '${e['label']}').toList();
-    final incomes = _breakdownData.map((e) => (e['income'] as num).toDouble()).toList();
-    final expenses = _breakdownData.map((e) => (e['expense'] as num).toDouble()).toList();
+    final incomes = _breakdownData
+        .map((e) => (e['income'] as num).toDouble())
+        .toList();
+    final expenses = _breakdownData
+        .map((e) => (e['expense'] as num).toDouble())
+        .toList();
     final maxV = [...incomes, ...expenses, 1.0].reduce((a, b) => a > b ? a : b);
 
     String rangeLabel;
     if (_breakdownPeriod == 'daily') {
-      rangeLabel = '${_breakdownMonth.toString().padLeft(2, '0')}/${_breakdownYear + 543}';
+      rangeLabel =
+          '${_breakdownMonth.toString().padLeft(2, '0')}/${_breakdownYear + 543}';
     } else if (_breakdownPeriod == 'monthly') {
       rangeLabel = '${_breakdownYear + 543}';
     } else {
@@ -874,9 +1093,15 @@ class _OverviewPageState extends State<OverviewPage> {
                       color: selected ? c.accent : c.surface2,
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Text(p[1],
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: selected ? Colors.white : c.ink3)),
+                    child: Text(
+                      p[1],
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: selected ? Colors.white : c.ink3,
+                      ),
+                    ),
                   ),
                 ),
               );
@@ -894,7 +1119,14 @@ class _OverviewPageState extends State<OverviewPage> {
                     onTap: () => _shiftBreakdownRange(-1),
                     child: Icon(Icons.chevron_left_rounded, color: c.ink3),
                   ),
-                  Text(rangeLabel, style: TextStyle(fontWeight: FontWeight.w700, color: c.ink, fontSize: 13.5)),
+                  Text(
+                    rangeLabel,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: c.ink,
+                      fontSize: 13.5,
+                    ),
+                  ),
                   GestureDetector(
                     onTap: () => _shiftBreakdownRange(1),
                     child: Icon(Icons.chevron_right_rounded, color: c.ink3),
@@ -911,14 +1143,27 @@ class _OverviewPageState extends State<OverviewPage> {
           else if (labels.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 24),
-              child: Center(child: Text('ยังไม่มีข้อมูล', style: TextStyle(color: c.ink3, fontSize: 13))),
+              child: Center(
+                child: Text(
+                  'ยังไม่มีข้อมูล',
+                  style: TextStyle(color: c.ink3, fontSize: 13),
+                ),
+              ),
             )
           else ...[
             Row(
               children: [
-                TrendLegend(color: c.good, icon: Icons.arrow_upward_rounded, label: 'รายรับ (เส้นทึบ)'),
+                TrendLegend(
+                  color: c.good,
+                  icon: Icons.arrow_upward_rounded,
+                  label: 'รายรับ (เส้นทึบ)',
+                ),
                 const SizedBox(width: 16),
-                TrendLegend(color: c.coral, icon: Icons.arrow_downward_rounded, label: 'รายจ่าย (เส้นประ)'),
+                TrendLegend(
+                  color: c.coral,
+                  icon: Icons.arrow_downward_rounded,
+                  label: 'รายจ่าย (เส้นประ)',
+                ),
               ],
             ),
             const SizedBox(height: 12),
@@ -950,7 +1195,9 @@ class _OverviewPageState extends State<OverviewPage> {
       } catch (_) {}
     }
 
-    final searchFrom = startDate.isAfter(firstOfThisMonth) ? startDate : firstOfThisMonth;
+    final searchFrom = startDate.isAfter(firstOfThisMonth)
+        ? startDate
+        : firstOfThisMonth;
 
     DateTime dueDateFor(int y, int m) {
       final daysInMonth = DateTime(y, m + 1, 0).day;
@@ -960,7 +1207,9 @@ class _OverviewPageState extends State<OverviewPage> {
     var nextDue = dueDateFor(searchFrom.year, searchFrom.month);
     if (nextDue.isBefore(searchFrom)) {
       final nextMonth = searchFrom.month == 12 ? 1 : searchFrom.month + 1;
-      final nextYear = searchFrom.month == 12 ? searchFrom.year + 1 : searchFrom.year;
+      final nextYear = searchFrom.month == 12
+          ? searchFrom.year + 1
+          : searchFrom.year;
       nextDue = dueDateFor(nextYear, nextMonth);
     }
     return nextDue;
@@ -990,12 +1239,20 @@ class _OverviewPageState extends State<OverviewPage> {
                   color: c.accentSoft,
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: Icon(Icons.check_circle_rounded, color: c.accent, size: 30),
+                child: Icon(
+                  Icons.check_circle_rounded,
+                  color: c.accent,
+                  size: 30,
+                ),
               ),
               const SizedBox(height: 16),
               Text(
                 'ยืนยันการชำระเงิน',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: c.ink),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: c.ink,
+                ),
               ),
               const SizedBox(height: 8),
               Text(
@@ -1005,7 +1262,10 @@ class _OverviewPageState extends State<OverviewPage> {
               ),
               const SizedBox(height: 12),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: c.surface2,
                   borderRadius: BorderRadius.circular(10),
@@ -1053,7 +1313,10 @@ class _OverviewPageState extends State<OverviewPage> {
     );
   }
 
-  Future<void> _executePayRecurring(dynamic item, BuildContext parentContext) async {
+  Future<void> _executePayRecurring(
+    dynamic item,
+    BuildContext parentContext,
+  ) async {
     final userId = await UserSession.getUserId();
     final id = item['id'].toString();
     final title = item['title'] ?? '';
@@ -1061,7 +1324,9 @@ class _OverviewPageState extends State<OverviewPage> {
     final category = item['category'] ?? 'ค่าใช้จ่ายประจำ';
     final isIndefinite = item['isIndefinite'] ?? true;
     final dayOfMonthDue = (item['dayOfMonthDue'] as num?)?.toInt() ?? 1;
-    final endDate = item['endDate'] != null ? DateTime.parse(item['endDate']) : null;
+    final endDate = item['endDate'] != null
+        ? DateTime.parse(item['endDate'])
+        : null;
 
     final currentNextDue = _calculateNextDue(item);
     final newStartDate = currentNextDue.add(const Duration(days: 1));
@@ -1098,10 +1363,13 @@ class _OverviewPageState extends State<OverviewPage> {
           ...item,
           'startDate': newStartDate.toIso8601String(),
         });
-        final fmtNext = '${nextDueAfter.day}/${nextDueAfter.month}/${nextDueAfter.year + 543}';
+        final fmtNext =
+            '${nextDueAfter.day}/${nextDueAfter.month}/${nextDueAfter.year + 543}';
         ScaffoldMessenger.of(parentContext).showSnackBar(
           SnackBar(
-            content: Text('บันทึกรายจ่าย ฿${amt.toStringAsFixed(0)} เรียบร้อยแล้ว (รอบถัดไป: $fmtNext)'),
+            content: Text(
+              'บันทึกรายจ่าย ฿${amt.toStringAsFixed(0)} เรียบร้อยแล้ว (รอบถัดไป: $fmtNext)',
+            ),
             backgroundColor: parentContext.c.accent,
           ),
         );
@@ -1109,7 +1377,11 @@ class _OverviewPageState extends State<OverviewPage> {
     } catch (e) {
       if (parentContext.mounted) {
         ScaffoldMessenger.of(parentContext).showSnackBar(
-          SnackBar(content: Text('เกิดข้อผิดพลาด: ${e.toString().replaceAll("Exception: ", "")}')),
+          SnackBar(
+            content: Text(
+              'เกิดข้อผิดพลาด: ${e.toString().replaceAll("Exception: ", "")}',
+            ),
+          ),
         );
       }
     }
@@ -1124,7 +1396,10 @@ class _OverviewPageState extends State<OverviewPage> {
         iconColor: c.amber,
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Text('ยังไม่มีรายการจ่ายประจำ', style: TextStyle(color: c.ink3)),
+          child: Text(
+            'ยังไม่มีรายการจ่ายประจำ',
+            style: TextStyle(color: c.ink3),
+          ),
         ),
       );
     }
@@ -1154,27 +1429,40 @@ class _OverviewPageState extends State<OverviewPage> {
         iconColor: c.amber,
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Text('ยังไม่มีรายการจ่ายประจำ', style: TextStyle(color: c.ink3)),
+          child: Text(
+            'ยังไม่มีรายการจ่ายประจำ',
+            style: TextStyle(color: c.ink3),
+          ),
         ),
       );
     }
 
-    final dueTarget = DateTime(nearestNextDue.year, nearestNextDue.month, nearestNextDue.day, 23, 59, 59);
+    // คำนวณเวลาครบกำหนดที่ 23:59:59 ของวันนั้น เพื่อ countdown ที่แม่นยำ
+    final dueTarget = DateTime(
+      nearestNextDue.year,
+      nearestNextDue.month,
+      nearestNextDue.day,
+      23,
+      59,
+      59,
+    );
     final remaining = dueTarget.difference(now);
 
     String countdownText;
     if (remaining.isNegative) {
       countdownText = 'เลยกำหนด';
     } else if (minDays == 0) {
+      // ครบกำหนดวันนี้ - แสดงแค่ ชม:นาที:วินาที
       final h = remaining.inHours.toString().padLeft(2, '0');
       final m = remaining.inMinutes.remainder(60).toString().padLeft(2, '0');
       final s = remaining.inSeconds.remainder(60).toString().padLeft(2, '0');
       countdownText = 'เหลือ $h:$m:$s';
     } else {
+      // เหลือหลายวัน - แสดง X วัน HH:MM:SS
       final h = remaining.inHours.remainder(24).toString().padLeft(2, '0');
       final m = remaining.inMinutes.remainder(60).toString().padLeft(2, '0');
       final s = remaining.inSeconds.remainder(60).toString().padLeft(2, '0');
-      countdownText = '$minDaysวัน $h:$m:$s';
+      countdownText = '$minDays วัน $h:$m:$s';
     }
 
     final day = (nearestItem['dayOfMonthDue'] as num?)?.toInt() ?? 1;
@@ -1184,130 +1472,457 @@ class _OverviewPageState extends State<OverviewPage> {
     final dueLabel = minDays == 0
         ? 'ครบกำหนดวันนี้'
         : (minDays < 0 ? 'เลยกำหนด ${minDays.abs()} วัน' : 'อีก $minDays วัน');
-    final Color dueFg = minDays <= 0 ? c.coral : (minDays <= 3 ? c.amber : c.ink3);
-    final Color dueBg = minDays <= 0 ? c.coralSoft : (minDays <= 3 ? c.amberSoft : c.surface2);
+    final Color dueFg = minDays <= 0
+        ? c.coral
+        : (minDays <= 3 ? c.amber : c.ink3);
+    final Color dueBg = minDays <= 0
+        ? c.coralSoft
+        : (minDays <= 3 ? c.amberSoft : c.surface2);
+
+    // คำนวณ progress bar (จากวันที่เริ่มรอบจนถึงวันครบกำหนด)
+    final startDate = nearestItem['startDate'] != null
+        ? DateTime.parse(nearestItem['startDate'])
+        : DateTime(now.year, now.month, 1);
+    final totalDuration = nearestNextDue
+        .difference(startDate)
+        .inSeconds
+        .toDouble();
+    final elapsed = now.difference(startDate).inSeconds.toDouble();
+    final progress = totalDuration > 0
+        ? (elapsed / totalDuration).clamp(0.0, 1.0)
+        : 0.0;
 
     return SectionCard(
       title: 'รายจ่ายประจำใกล้ที่สุด',
       caption: 'รายการถัดไปที่ต้องชำระ',
       icon: Icons.event_repeat_rounded,
       iconColor: c.amber,
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: c.amberSoft.withValues(alpha: 0.5),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: c.amber.withValues(alpha: 0.3)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: minDays <= 0 ? [c.coral, c.amber] : [c.amber, c.accent],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: (minDays <= 0 ? c.coral : c.amber).withValues(alpha: 0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.timer_rounded, color: Colors.white, size: 18),
-                  const SizedBox(height: 4),
-                  Text(
-                    countdownText,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
-                      color: Colors.white,
-                      letterSpacing: 0.3,
-                    ),
-                  ),
-                  Text(
-                    'นับถอยหลัง',
-                    style: TextStyle(
-                      fontSize: 9.5,
-                      color: Colors.white.withValues(alpha: 0.85),
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: c.amberSoft.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: c.amber.withValues(alpha: 0.3)),
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
-                      color: c.ink,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'จ่ายทุกวันที่ $day ของเดือน',
-                    style: TextStyle(fontSize: 12, color: c.ink3, fontWeight: FontWeight.w500),
-                  ),
-                  const SizedBox(height: 6),
-                  Pill(dueLabel, fg: dueFg, bg: dueBg),
-                ],
-              ),
-            ),
-            const SizedBox(width: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
+            child: Column(
               children: [
-                Text(
-                  '฿${amt.toStringAsFixed(0)}',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 18,
-                    color: c.ink,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                GestureDetector(
-                  onTap: () => _confirmPayRecurring(nearestItem, context),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: c.accentSoft,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: c.accent.withValues(alpha: 0.3)),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: minDays <= 0
+                              ? [c.coral, c.amber]
+                              : [c.amber, c.accent],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: (minDays <= 0 ? c.coral : c.amber)
+                                .withValues(alpha: 0.3),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.timer_rounded,
+                            color: Colors.white,
+                            size: 18,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            countdownText,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                          Text(
+                            'นับถอยหลัง',
+                            style: TextStyle(
+                              fontSize: 9.5,
+                              color: Colors.white.withValues(alpha: 0.85),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                              color: c.ink,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'จ่ายทุกวันที่ $day ของเดือน',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: c.ink3,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Pill(dueLabel, fg: dueFg, bg: dueBg),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Icon(Icons.check_circle_rounded, size: 14, color: c.accent),
-                        const SizedBox(width: 4),
                         Text(
-                          'จ่ายแล้ว',
-                          style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: c.accent),
+                          '฿${amt.toStringAsFixed(0)}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 18,
+                            color: c.ink,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        GestureDetector(
+                          onTap: () =>
+                              _confirmPayRecurring(nearestItem, context),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: c.accentSoft,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: c.accent.withValues(alpha: 0.3),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.check_circle_rounded,
+                                  size: 14,
+                                  color: c.accent,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'จ่ายแล้ว',
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: c.accent,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ],
                     ),
-                  ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                // Progress bar แสดงความคืบหน้าจากเริ่มรอบจนถึงครบกำหนด
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'ความคืบหน้า',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: c.ink3,
+                          ),
+                        ),
+                        Text(
+                          '${(progress * 100).toStringAsFixed(0)}%',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            color: minDays <= 0 ? c.coral : c.amber,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: c.surface2,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: FractionallySizedBox(
+                          widthFactor: progress,
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: minDays <= 0
+                                    ? [c.coral, c.amber]
+                                    : progress > 0.7
+                                    ? [c.amber, c.coral]
+                                    : [c.accent, c.amber],
+                              ),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
+    );
+  }
+}
+
+class _BlinkingClassStatusTile extends StatefulWidget {
+  final String tag;
+  final String title;
+  final String subtitle;
+  final Color color;
+  final Color normalTitleColor;
+  final Color normalSubtitleColor;
+  final bool isHighlight;
+  final bool shouldBlink;
+  final String? countdownText;
+  final String? countdownLabel;
+  final int? blinkTrigger;
+
+  const _BlinkingClassStatusTile({
+    super.key,
+    required this.tag,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+    required this.normalTitleColor,
+    required this.normalSubtitleColor,
+    required this.isHighlight,
+    required this.shouldBlink,
+    this.countdownText,
+    this.countdownLabel,
+    this.blinkTrigger,
+  });
+
+  @override
+  State<_BlinkingClassStatusTile> createState() =>
+      _BlinkingClassStatusTileState();
+}
+
+class _BlinkingClassStatusTileState extends State<_BlinkingClassStatusTile>
+    with SingleTickerProviderStateMixin {
+  static const _blinkColor = Color(0xFF0F172A);
+  late final AnimationController _controller;
+  late final Animation<double> _blink;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    );
+    _blink = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0, end: 1), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: 1, end: 0), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: 0, end: 1), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: 1, end: 0), weight: 1),
+    ]).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+    _syncBlink();
+  }
+
+  @override
+  void didUpdateWidget(covariant _BlinkingClassStatusTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.shouldBlink != widget.shouldBlink ||
+        oldWidget.blinkTrigger != widget.blinkTrigger) {
+      _syncBlink();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _syncBlink() {
+    if (widget.shouldBlink) {
+      _controller.forward(from: 0);
+    } else {
+      _controller.stop();
+      _controller.value = 0;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _blink,
+      builder: (context, child) {
+        final blinkValue = widget.shouldBlink ? _blink.value : 0.0;
+        final normalBg = widget.isHighlight
+            ? widget.color.withValues(alpha: 0.08)
+            : Colors.transparent;
+        final bgColor = Color.lerp(normalBg, _blinkColor, blinkValue)!;
+        final titleColor = Color.lerp(
+          widget.normalTitleColor,
+          Colors.white,
+          blinkValue,
+        )!;
+        final subtitleColor = Color.lerp(
+          widget.normalSubtitleColor,
+          Colors.white.withValues(alpha: 0.78),
+          blinkValue,
+        )!;
+        final accentTextColor = Color.lerp(
+          widget.color,
+          Colors.white,
+          blinkValue,
+        )!;
+        final tagBgColor = Color.lerp(
+          widget.color.withValues(alpha: 0.12),
+          Colors.white.withValues(alpha: 0.18),
+          blinkValue,
+        )!;
+        final countdownBgColor = Color.lerp(
+          widget.color.withValues(alpha: 0.13),
+          Colors.white.withValues(alpha: 0.16),
+          blinkValue,
+        )!;
+        final countdownBorderColor = Color.lerp(
+          widget.color.withValues(alpha: 0.25),
+          Colors.white.withValues(alpha: 0.28),
+          blinkValue,
+        )!;
+
+        return Container(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+          margin: const EdgeInsets.only(bottom: 4),
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: tagBgColor,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  widget.tag,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: accentTextColor,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.title,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                        color: titleColor,
+                      ),
+                    ),
+                    Text(
+                      widget.subtitle,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: subtitleColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (widget.countdownText != null) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: countdownBgColor,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: countdownBorderColor, width: 1),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        widget.countdownLabel ?? '',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w600,
+                          color: Color.lerp(
+                            widget.color.withValues(alpha: 0.7),
+                            Colors.white.withValues(alpha: 0.75),
+                            blinkValue,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        widget.countdownText!,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                          color: accentTextColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -1318,7 +1933,8 @@ class _NotificationCenterSheet extends StatefulWidget {
   const _NotificationCenterSheet({required this.userId});
 
   @override
-  State<_NotificationCenterSheet> createState() => _NotificationCenterSheetState();
+  State<_NotificationCenterSheet> createState() =>
+      _NotificationCenterSheetState();
 }
 
 class _NotificationCenterSheetState extends State<_NotificationCenterSheet> {
@@ -1429,75 +2045,84 @@ class _NotificationCenterSheetState extends State<_NotificationCenterSheet> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _notifications.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.check_circle_outline,
+                          size: 48,
+                          color: colors.ink3,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'ไม่มีรายการแจ้งเตือนในขณะนี้',
+                          style: TextStyle(color: colors.ink2, fontSize: 14),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: _notifications.length,
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(height: 10),
+                    itemBuilder: (context, index) {
+                      final item = _notifications[index];
+                      final type = item['type']?.toString();
+                      final title = item['title']?.toString() ?? 'การแจ้งเตือน';
+                      final message = item['message']?.toString() ?? '';
+                      final severity = item['severity']?.toString();
+                      final color = _getSeverityColor(severity, colors);
+
+                      return Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: colors.surface2,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: colors.border),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(Icons.check_circle_outline, size: 48, color: colors.ink3),
-                            const SizedBox(height: 12),
-                            Text(
-                              'ไม่มีรายการแจ้งเตือนในขณะนี้',
-                              style: TextStyle(color: colors.ink2, fontSize: 14),
+                            CircleAvatar(
+                              radius: 20,
+                              backgroundColor: color.withValues(alpha: 0.15),
+                              child: Icon(
+                                _getTypeIcon(type),
+                                color: color,
+                                size: 20,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    title,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                      color: colors.ink,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    message,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: colors.ink2,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ],
                         ),
-                      )
-                    : ListView.separated(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: _notifications.length,
-                        separatorBuilder: (context, index) => const SizedBox(height: 10),
-                        itemBuilder: (context, index) {
-                          final item = _notifications[index];
-                          final type = item['type']?.toString();
-                          final title = item['title']?.toString() ?? 'การแจ้งเตือน';
-                          final message = item['message']?.toString() ?? '';
-                          final severity = item['severity']?.toString();
-                          final color = _getSeverityColor(severity, colors);
-
-                          return Container(
-                            padding: const EdgeInsets.all(14),
-                            decoration: BoxDecoration(
-                              color: colors.surface2,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: colors.border),
-                            ),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                CircleAvatar(
-                                  radius: 20,
-                                  backgroundColor: color.withValues(alpha: 0.15),
-                                  child: Icon(_getTypeIcon(type), color: color, size: 20),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        title,
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 14,
-                                          color: colors.ink,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        message,
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          color: colors.ink2,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),

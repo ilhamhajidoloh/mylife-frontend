@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
 import '../widgets/charts.dart';
+import '../widgets/book_selector.dart';
 import '../services/api_client.dart';
 import '../services/api_services.dart';
 import '../services/user_session.dart';
@@ -11,6 +12,7 @@ import '../services/cache_service.dart';
 import '../services/logger.dart';
 import '../services/notification_service.dart';
 import '../services/data_event_service.dart';
+import 'books_management_page.dart';
 
 class FinancePage extends StatefulWidget {
   const FinancePage({super.key});
@@ -39,26 +41,74 @@ class _FinancePageState extends State<FinancePage> {
   int _breakdownMonth = DateTime.now().month;
   bool _isBreakdownLoading = true;
 
+  // Multiple Books support
+  List<dynamic> _books = [];
+  String? _selectedBookId;
+  bool _isBooksLoading = true;
+
   StreamSubscription<void>? _dataSubscription;
+  Timer? _recurringCountdownTimer;
 
   @override
   void initState() {
     super.initState();
+    _loadBooks();
     _loadFinanceData();
     _loadRecurring();
     _loadBreakdown();
     _dataSubscription = DataEventService.onDataChanged.listen((_) {
       if (mounted) {
+        _loadBooks();
         _loadFinanceData();
         _loadRecurring();
         _loadBreakdown();
       }
     });
+
+    // อัพเดท countdown ทุกวินาทีสำหรับรายจ่ายประจำ
+    _recurringCountdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && _recurringExpenses.isNotEmpty) {
+        setState(() {
+          // Force rebuild เพื่อแสดง countdown ที่อัพเดท
+        });
+      }
+    });
+  }
+
+  Future<void> _loadBooks() async {
+    setState(() => _isBooksLoading = true);
+    try {
+      final userId = await UserSession.getUserId();
+      if (userId == null) return;
+
+      final data = await BookApiService.getBooks(userId);
+      setState(() {
+        _books = data ?? [];
+        _isBooksLoading = false;
+      });
+    } catch (e) {
+      Logger.error('FinancePage', 'Load books error: $e');
+      setState(() => _isBooksLoading = false);
+    }
+  }
+
+  void _onBookSelected(String? bookId) {
+    setState(() => _selectedBookId = bookId);
+    _loadFinanceData();
+    _loadBreakdown();
+  }
+
+  void _onManageBooks() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const BooksManagementPage()),
+    ).then((_) => _loadBooks());
   }
 
   @override
   void dispose() {
     _dataSubscription?.cancel();
+    _recurringCountdownTimer?.cancel();
     super.dispose();
   }
 
@@ -66,10 +116,14 @@ class _FinancePageState extends State<FinancePage> {
     final userId = await UserSession.getUserId();
 
     // 1. อ่านข้อมูลจาก Cache ก่อนทันทีเพื่อการตอบสนองที่รวดเร็ว
-    final cachedSummary = await CacheService.get(userId, CacheService.financeSummary);
+    final cachedSummary = await CacheService.get(
+      userId,
+      CacheService.financeSummary,
+    );
     if (cachedSummary != null) {
       _totalIncome = (cachedSummary['totalIncome'] as num?)?.toDouble() ?? 0.0;
-      _totalExpense = (cachedSummary['totalExpense'] as num?)?.toDouble() ?? 0.0;
+      _totalExpense =
+          (cachedSummary['totalExpense'] as num?)?.toDouble() ?? 0.0;
       _netBalance = (cachedSummary['netBalance'] as num?)?.toDouble() ?? 0.0;
       _isLowBalance = cachedSummary['isLowBalance'] == true;
       _top5Expenses = cachedSummary['top5Expenses'] ?? [];
@@ -123,7 +177,8 @@ class _FinancePageState extends State<FinancePage> {
       await NotificationService.showInstantNotification(
         id: 84031975,
         title: '⚠️ เงินคงเหลือใกล้หมด',
-        body: 'เงินคงเหลือของคุณต่ำกว่า 0.5% ของรายรับทั้งหมดแล้ว ลองตรวจสอบรายจ่ายของคุณ',
+        body:
+            'เงินคงเหลือของคุณต่ำกว่า 0.5% ของรายรับทั้งหมดแล้ว ลองตรวจสอบรายจ่ายของคุณ',
       );
       await prefs.setString('low_balance_notif_date', todayKey);
     } catch (e, st) {
@@ -134,7 +189,10 @@ class _FinancePageState extends State<FinancePage> {
   Future<void> _loadRecurring() async {
     final userId = await UserSession.getUserId();
 
-    final cached = await CacheService.get(userId, CacheService.financeRecurring);
+    final cached = await CacheService.get(
+      userId,
+      CacheService.financeRecurring,
+    );
     if (cached != null && mounted) setState(() => _recurringExpenses = cached);
 
     try {
@@ -195,12 +253,23 @@ class _FinancePageState extends State<FinancePage> {
     _loadBreakdown();
   }
 
+  bool _isIncomeType(dynamic type) {
+    if (type == null) return false;
+    if (type == 0 || type == '0') return true;
+    final str = type.toString().toLowerCase().trim();
+    return str == 'income' || str == '0';
+  }
+
   void _openTransactionModal([dynamic item]) {
     final isEdit = item != null;
-    final categoryController = TextEditingController(text: item?['category'] ?? '');
+    final categoryController = TextEditingController(
+      text: item?['category'] ?? '',
+    );
     final titleController = TextEditingController(text: item?['note'] ?? '');
-    final amountController = TextEditingController(text: item?['amount'] != null ? (item!['amount'] as num).toString() : '');
-    bool isIncome = isEdit ? (item?['type'] == 0) : false;
+    final amountController = TextEditingController(
+      text: item?['amount'] != null ? (item!['amount'] as num).toString() : '',
+    );
+    bool isIncome = isEdit ? _isIncomeType(item?['type']) : false;
 
     showAppBottomSheet(
       context,
@@ -210,15 +279,41 @@ class _FinancePageState extends State<FinancePage> {
         builder: (context, setModalState) {
           final cc = context.c;
 
-          final defaultExpenseCategories = ['อาหาร', 'เดินทาง', 'ช้อปปิ้ง', 'ค่าใช้จ่ายบ้าน', 'บันเทิง', 'สุขภาพ', 'การศึกษา', 'ทั่วไป'];
-          final defaultIncomeCategories = ['เงินเดือน', 'โบนัส', 'ธุรกิจส่วนตัว', 'การลงทุน', 'ของขวัญ', 'ทั่วไป'];
+          final defaultExpenseCategories = [
+            'อาหาร',
+            'เดินทาง',
+            'ช้อปปิ้ง',
+            'ค่าใช้จ่ายบ้าน',
+            'บันเทิง',
+            'สุขภาพ',
+            'การศึกษา',
+            'ทั่วไป',
+          ];
+          final defaultIncomeCategories = [
+            'เงินเดือน',
+            'โบนัส',
+            'ธุรกิจส่วนตัว',
+            'การลงทุน',
+            'ของขวัญ',
+            'ทั่วไป',
+          ];
 
-          final baseList = isIncome ? defaultIncomeCategories : defaultExpenseCategories;
+          final baseList = isIncome
+              ? defaultIncomeCategories
+              : defaultExpenseCategories;
           final existingCats = _transactions
-              .where((t) => (isIncome ? t['type'] == 0 : t['type'] == 1) && t['category'] != null && t['category'].toString().trim().isNotEmpty)
+              .where(
+                (t) =>
+                    (_isIncomeType(t['type']) == isIncome) &&
+                    t['category'] != null &&
+                    t['category'].toString().trim().isNotEmpty,
+              )
               .map((t) => t['category'].toString().trim())
               .toSet();
-          final allCategorySuggestions = {...baseList, ...existingCats}.toList();
+          final allCategorySuggestions = {
+            ...baseList,
+            ...existingCats,
+          }.toList();
 
           return Column(
             mainAxisSize: MainAxisSize.min,
@@ -243,12 +338,15 @@ class _FinancePageState extends State<FinancePage> {
                             color: !isIncome ? cc.coral : Colors.transparent,
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child: Text('รายจ่าย',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                  color: !isIncome ? Colors.white : cc.ink3)),
+                          child: Text(
+                            'รายจ่าย',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: !isIncome ? Colors.white : cc.ink3,
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -262,12 +360,15 @@ class _FinancePageState extends State<FinancePage> {
                             color: isIncome ? cc.good : Colors.transparent,
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child: Text('รายรับ',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                  color: isIncome ? Colors.white : cc.ink3)),
+                          child: Text(
+                            'รายรับ',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: isIncome ? Colors.white : cc.ink3,
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -277,7 +378,11 @@ class _FinancePageState extends State<FinancePage> {
               const SizedBox(height: 16),
 
               // Category Field
-              AppModalField(controller: categoryController, label: 'หมวดหมู่ (เลือกหรือพิมพ์สร้างใหม่)', icon: Icons.category_rounded),
+              AppModalField(
+                controller: categoryController,
+                label: 'หมวดหมู่ (เลือกหรือพิมพ์สร้างใหม่)',
+                icon: Icons.category_rounded,
+              ),
               const SizedBox(height: 8),
 
               // Category Chips / Suggestions
@@ -289,7 +394,14 @@ class _FinancePageState extends State<FinancePage> {
                     return Padding(
                       padding: const EdgeInsets.only(right: 6),
                       child: ChoiceChip(
-                        label: Text(cat, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: selected ? Colors.white : cc.ink2)),
+                        label: Text(
+                          cat,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: selected ? Colors.white : cc.ink2,
+                          ),
+                        ),
                         selected: selected,
                         selectedColor: isIncome ? cc.good : cc.coral,
                         backgroundColor: cc.surface2,
@@ -306,11 +418,20 @@ class _FinancePageState extends State<FinancePage> {
               const SizedBox(height: 14),
 
               // Title / Note Field
-              AppModalField(controller: titleController, label: 'ชื่อรายการ / หมายเหตุ', icon: Icons.receipt_rounded),
+              AppModalField(
+                controller: titleController,
+                label: 'ชื่อรายการ / หมายเหตุ',
+                icon: Icons.receipt_rounded,
+              ),
               const SizedBox(height: 12),
 
               // Amount Field
-              AppModalField(controller: amountController, label: 'จำนวนเงิน (บาท)', icon: Icons.payments_rounded, keyboardType: TextInputType.number),
+              AppModalField(
+                controller: amountController,
+                label: 'จำนวนเงิน (บาท)',
+                icon: Icons.payments_rounded,
+                keyboardType: TextInputType.number,
+              ),
               const SizedBox(height: 24),
 
               Row(
@@ -324,12 +445,22 @@ class _FinancePageState extends State<FinancePage> {
                           color: cc.coralSoft,
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Icon(Icons.delete_outline_rounded, color: cc.coral, size: 20),
+                        child: Icon(
+                          Icons.delete_outline_rounded,
+                          color: cc.coral,
+                          size: 20,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 8),
                   ],
-                  Expanded(child: AppModalButton(label: 'ยกเลิก', onPressed: () => Navigator.pop(context), isPrimary: false)),
+                  Expanded(
+                    child: AppModalButton(
+                      label: 'ยกเลิก',
+                      onPressed: () => Navigator.pop(context),
+                      isPrimary: false,
+                    ),
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: AppModalButton(
@@ -339,14 +470,21 @@ class _FinancePageState extends State<FinancePage> {
                         final amt = double.tryParse(amountController.text) ?? 0;
                         if (amt <= 0) return;
 
-                        final categoryText = categoryController.text.trim().isEmpty ? 'ทั่วไป' : categoryController.text.trim();
-                        final noteText = titleController.text.trim().isEmpty ? categoryText : titleController.text.trim();
+                        final categoryText =
+                            categoryController.text.trim().isEmpty
+                            ? 'ทั่วไป'
+                            : categoryController.text.trim();
+                        final noteText = titleController.text.trim().isEmpty
+                            ? categoryText
+                            : titleController.text.trim();
                         final userId = await UserSession.getUserId();
 
                         if (isEdit && item?['id'] != null) {
                           DateTime? origDate;
                           if (item['transactionDate'] != null) {
-                            origDate = DateTime.tryParse(item['transactionDate']);
+                            origDate = DateTime.tryParse(
+                              item['transactionDate'],
+                            );
                           }
                           await FinanceApiService.updateTransaction(
                             item['id'].toString(),
@@ -358,7 +496,13 @@ class _FinancePageState extends State<FinancePage> {
                             transactionDate: origDate,
                           );
                         } else {
-                          await FinanceApiService.addTransaction(userId, amt, isIncome, categoryText, noteText);
+                          await FinanceApiService.addTransaction(
+                            userId,
+                            amt,
+                            isIncome,
+                            categoryText,
+                            noteText,
+                          );
                         }
                         if (context.mounted) Navigator.pop(context);
                         _loadFinanceData();
@@ -390,11 +534,25 @@ class _FinancePageState extends State<FinancePage> {
               Container(
                 width: 56,
                 height: 56,
-                decoration: BoxDecoration(color: c.coralSoft, borderRadius: BorderRadius.circular(16)),
-                child: Icon(Icons.delete_outline_rounded, color: c.coral, size: 28),
+                decoration: BoxDecoration(
+                  color: c.coralSoft,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(
+                  Icons.delete_outline_rounded,
+                  color: c.coral,
+                  size: 28,
+                ),
               ),
               const SizedBox(height: 16),
-              Text('ลบรายการนี้?', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: c.ink)),
+              Text(
+                'ลบรายการนี้?',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: c.ink,
+                ),
+              ),
               const SizedBox(height: 6),
               Text(
                 'ต้องการลบรายการ "${item['note'] ?? item['category'] ?? ''}" ออกใช่หรือไม่?',
@@ -405,7 +563,11 @@ class _FinancePageState extends State<FinancePage> {
               Row(
                 children: [
                   Expanded(
-                    child: AppModalButton(label: 'ยกเลิก', onPressed: () => Navigator.pop(ctx), isPrimary: false),
+                    child: AppModalButton(
+                      label: 'ยกเลิก',
+                      onPressed: () => Navigator.pop(ctx),
+                      isPrimary: false,
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -414,11 +576,15 @@ class _FinancePageState extends State<FinancePage> {
                       isDestructive: true,
                       onPressed: () async {
                         if (item['id'] != null) {
-                          await FinanceApiService.deleteTransaction(item['id'].toString());
+                          await FinanceApiService.deleteTransaction(
+                            item['id'].toString(),
+                          );
                         }
                         if (ctx.mounted) Navigator.pop(ctx);
                         if (parentContext.mounted) Navigator.pop(parentContext);
                         _loadFinanceData();
+                        _loadRecurring();
+                        _loadBreakdown();
                         DataEventService.notifyDataChanged();
                       },
                     ),
@@ -441,28 +607,60 @@ class _FinancePageState extends State<FinancePage> {
         mainAxisSize: MainAxisSize.min,
         children: [
           for (var i = 0; i < _remainingExpenses.length; i++) ...[
-            Builder(builder: (context) {
-              final cc = context.c;
-              final rank = i + 6;
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(color: cc.surface2, borderRadius: BorderRadius.circular(10)),
-                      child: Center(child: Text('$rank', style: TextStyle(color: cc.ink3, fontWeight: FontWeight.w800, fontSize: 13))),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(child: Text(_remainingExpenses[i]['category'] ?? '', style: TextStyle(fontWeight: FontWeight.w600, color: cc.ink))),
-                    Text('฿${(_remainingExpenses[i]['amount'] as num).toStringAsFixed(0)}',
-                        style: TextStyle(fontWeight: FontWeight.w800, color: cc.ink2, fontSize: 14)),
-                  ],
-                ),
-              );
-            }),
-            if (i < _remainingExpenses.length - 1) Divider(height: 1, color: context.c.border.withValues(alpha: 0.5)),
+            Builder(
+              builder: (context) {
+                final cc = context.c;
+                final rank = i + 6;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: cc.surface2,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Center(
+                          child: Text(
+                            '$rank',
+                            style: TextStyle(
+                              color: cc.ink3,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          _remainingExpenses[i]['category'] ?? '',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: cc.ink,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '฿${(_remainingExpenses[i]['amount'] as num).toStringAsFixed(0)}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          color: cc.ink2,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+            if (i < _remainingExpenses.length - 1)
+              Divider(
+                height: 1,
+                color: context.c.border.withValues(alpha: 0.5),
+              ),
           ],
         ],
       ),
@@ -472,11 +670,17 @@ class _FinancePageState extends State<FinancePage> {
   void _openRecurringModal([dynamic item]) {
     final isEdit = item != null;
     final titleController = TextEditingController(text: item?['title'] ?? '');
-    final amountController = TextEditingController(text: item?['amount'] != null ? (item!['amount'] as num).toString() : '');
+    final amountController = TextEditingController(
+      text: item?['amount'] != null ? (item!['amount'] as num).toString() : '',
+    );
     int dayOfMonth = (item?['dayOfMonthDue'] as num?)?.toInt() ?? 1;
     bool isIndefinite = isEdit ? (item?['isIndefinite'] ?? true) : true;
-    DateTime startDate = isEdit && item['startDate'] != null ? DateTime.parse(item['startDate']) : DateTime.now();
-    DateTime? endDate = isEdit && item['endDate'] != null ? DateTime.parse(item['endDate']) : null;
+    DateTime startDate = isEdit && item['startDate'] != null
+        ? DateTime.parse(item['startDate'])
+        : DateTime.now();
+    DateTime? endDate = isEdit && item['endDate'] != null
+        ? DateTime.parse(item['endDate'])
+        : null;
 
     showAppBottomSheet(
       context,
@@ -491,9 +695,18 @@ class _FinancePageState extends State<FinancePage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              AppModalField(controller: titleController, label: 'ชื่อรายการ เช่น ค่าเน็ต, ค่าเช่าหอ', icon: Icons.receipt_long_rounded),
+              AppModalField(
+                controller: titleController,
+                label: 'ชื่อรายการ เช่น ค่าเน็ต, ค่าเช่าหอ',
+                icon: Icons.receipt_long_rounded,
+              ),
               const SizedBox(height: 12),
-              AppModalField(controller: amountController, label: 'จำนวนเงิน (บาท)', icon: Icons.payments_rounded, keyboardType: TextInputType.number),
+              AppModalField(
+                controller: amountController,
+                label: 'จำนวนเงิน (บาท)',
+                icon: Icons.payments_rounded,
+                keyboardType: TextInputType.number,
+              ),
               const SizedBox(height: 18),
               AppModalSection(
                 title: 'วันที่ต้องจ่ายทุกเดือน',
@@ -501,7 +714,12 @@ class _FinancePageState extends State<FinancePage> {
                   height: 84,
                   child: GridView.builder(
                     scrollDirection: Axis.horizontal,
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, mainAxisSpacing: 6, crossAxisSpacing: 6),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          mainAxisSpacing: 6,
+                          crossAxisSpacing: 6,
+                        ),
                     itemCount: 31,
                     itemBuilder: (context, i) {
                       final day = i + 1;
@@ -515,7 +733,14 @@ class _FinancePageState extends State<FinancePage> {
                             color: selected ? cc.accent : cc.surface2,
                             borderRadius: BorderRadius.circular(9),
                           ),
-                          child: Text('$day', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: selected ? Colors.white : cc.ink2)),
+                          child: Text(
+                            '$day',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: selected ? Colors.white : cc.ink2,
+                            ),
+                          ),
                         ),
                       );
                     },
@@ -532,32 +757,46 @@ class _FinancePageState extends State<FinancePage> {
                       children: [
                         Expanded(
                           child: GestureDetector(
-                            onTap: () => setModalState(() => isIndefinite = true),
+                            onTap: () =>
+                                setModalState(() => isIndefinite = true),
                             child: Container(
                               padding: const EdgeInsets.symmetric(vertical: 10),
                               decoration: BoxDecoration(
                                 color: isIndefinite ? cc.accent : cc.surface2,
                                 borderRadius: BorderRadius.circular(10),
                               ),
-                              child: Text('ไม่มีกำหนดสิ้นสุด',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: isIndefinite ? Colors.white : cc.ink3)),
+                              child: Text(
+                                'ไม่มีกำหนดสิ้นสุด',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: isIndefinite ? Colors.white : cc.ink3,
+                                ),
+                              ),
                             ),
                           ),
                         ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: GestureDetector(
-                            onTap: () => setModalState(() => isIndefinite = false),
+                            onTap: () =>
+                                setModalState(() => isIndefinite = false),
                             child: Container(
                               padding: const EdgeInsets.symmetric(vertical: 10),
                               decoration: BoxDecoration(
                                 color: !isIndefinite ? cc.accent : cc.surface2,
                                 borderRadius: BorderRadius.circular(10),
                               ),
-                              child: Text('มีวันสิ้นสุด',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: !isIndefinite ? Colors.white : cc.ink3)),
+                              child: Text(
+                                'มีวันสิ้นสุด',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: !isIndefinite ? Colors.white : cc.ink3,
+                                ),
+                              ),
                             ),
                           ),
                         ),
@@ -572,17 +811,34 @@ class _FinancePageState extends State<FinancePage> {
                           firstDate: DateTime(2020),
                           lastDate: DateTime(2100),
                         );
-                        if (picked != null) setModalState(() => startDate = picked);
+                        if (picked != null)
+                          setModalState(() => startDate = picked);
                       },
                       child: Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        decoration: BoxDecoration(color: cc.surface2, borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: cc.surface2,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                         child: Row(
                           children: [
-                            Icon(Icons.calendar_today_rounded, size: 16, color: cc.ink3),
+                            Icon(
+                              Icons.calendar_today_rounded,
+                              size: 16,
+                              color: cc.ink3,
+                            ),
                             const SizedBox(width: 10),
-                            Text('เริ่ม: ${fmtDate(startDate)}', style: TextStyle(fontWeight: FontWeight.w600, color: cc.ink)),
+                            Text(
+                              'เริ่ม: ${fmtDate(startDate)}',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: cc.ink,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -597,19 +853,35 @@ class _FinancePageState extends State<FinancePage> {
                             firstDate: startDate,
                             lastDate: DateTime(2100),
                           );
-                          if (picked != null) setModalState(() => endDate = picked);
+                          if (picked != null)
+                            setModalState(() => endDate = picked);
                         },
                         child: Container(
                           width: double.infinity,
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                          decoration: BoxDecoration(color: cc.surface2, borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            color: cc.surface2,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                           child: Row(
                             children: [
-                              Icon(Icons.event_busy_rounded, size: 16, color: cc.ink3),
+                              Icon(
+                                Icons.event_busy_rounded,
+                                size: 16,
+                                color: cc.ink3,
+                              ),
                               const SizedBox(width: 10),
                               Text(
-                                endDate != null ? 'สิ้นสุด: ${fmtDate(endDate!)}' : 'เลือกวันที่สิ้นสุด',
-                                style: TextStyle(fontWeight: FontWeight.w600, color: cc.ink),
+                                endDate != null
+                                    ? 'สิ้นสุด: ${fmtDate(endDate!)}'
+                                    : 'เลือกวันที่สิ้นสุด',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: cc.ink,
+                                ),
                               ),
                             ],
                           ),
@@ -629,13 +901,30 @@ class _FinancePageState extends State<FinancePage> {
                         _confirmPayRecurring(item, context);
                       },
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                        decoration: BoxDecoration(color: cc.accentSoft, borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: cc.accentSoft,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                         child: Row(
                           children: [
-                            Icon(Icons.check_circle_outline_rounded, color: cc.accent, size: 18),
+                            Icon(
+                              Icons.check_circle_outline_rounded,
+                              color: cc.accent,
+                              size: 18,
+                            ),
                             const SizedBox(width: 4),
-                            Text('จ่ายแล้ว', style: TextStyle(color: cc.accent, fontWeight: FontWeight.w700, fontSize: 13)),
+                            Text(
+                              'จ่ายแล้ว',
+                              style: TextStyle(
+                                color: cc.accent,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -645,13 +934,26 @@ class _FinancePageState extends State<FinancePage> {
                       onTap: () => _confirmDeleteRecurring(item, context),
                       child: Container(
                         padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(color: cc.coralSoft, borderRadius: BorderRadius.circular(12)),
-                        child: Icon(Icons.delete_outline_rounded, color: cc.coral, size: 20),
+                        decoration: BoxDecoration(
+                          color: cc.coralSoft,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          Icons.delete_outline_rounded,
+                          color: cc.coral,
+                          size: 20,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 8),
                   ],
-                  Expanded(child: AppModalButton(label: 'ยกเลิก', onPressed: () => Navigator.pop(context), isPrimary: false)),
+                  Expanded(
+                    child: AppModalButton(
+                      label: 'ยกเลิก',
+                      onPressed: () => Navigator.pop(context),
+                      isPrimary: false,
+                    ),
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: AppModalButton(
@@ -660,19 +962,25 @@ class _FinancePageState extends State<FinancePage> {
                         final amt = double.tryParse(amountController.text) ?? 0;
                         if (titleController.text.trim().isEmpty) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('กรุณากรอกชื่อรายการ')),
+                            const SnackBar(
+                              content: Text('กรุณากรอกชื่อรายการ'),
+                            ),
                           );
                           return;
                         }
                         if (amt <= 0) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('กรุณากรอกจำนวนเงินให้ถูกต้อง')),
+                            const SnackBar(
+                              content: Text('กรุณากรอกจำนวนเงินให้ถูกต้อง'),
+                            ),
                           );
                           return;
                         }
                         if (!isIndefinite && endDate == null) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('กรุณาเลือกวันที่สิ้นสุด')),
+                            const SnackBar(
+                              content: Text('กรุณาเลือกวันที่สิ้นสุด'),
+                            ),
                           );
                           return;
                         }
@@ -680,13 +988,26 @@ class _FinancePageState extends State<FinancePage> {
                           final userId = await UserSession.getUserId();
                           if (isEdit && item?['id'] != null) {
                             await FinanceApiService.updateRecurring(
-                              item['id'].toString(), userId, titleController.text.trim(), amt, 'ค่าใช้จ่ายประจำ',
-                              startDate, isIndefinite ? null : endDate, isIndefinite, dayOfMonth,
+                              item['id'].toString(),
+                              userId,
+                              titleController.text.trim(),
+                              amt,
+                              'ค่าใช้จ่ายประจำ',
+                              startDate,
+                              isIndefinite ? null : endDate,
+                              isIndefinite,
+                              dayOfMonth,
                             );
                           } else {
                             await FinanceApiService.addRecurring(
-                              userId, titleController.text.trim(), amt, 'ค่าใช้จ่ายประจำ',
-                              startDate, isIndefinite ? null : endDate, isIndefinite, dayOfMonth,
+                              userId,
+                              titleController.text.trim(),
+                              amt,
+                              'ค่าใช้จ่ายประจำ',
+                              startDate,
+                              isIndefinite ? null : endDate,
+                              isIndefinite,
+                              dayOfMonth,
                             );
                           }
                           if (context.mounted) Navigator.pop(context);
@@ -695,7 +1016,11 @@ class _FinancePageState extends State<FinancePage> {
                         } catch (e) {
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('บันทึกไม่สำเร็จ: ${e.toString().replaceAll("Exception: ", "")}')),
+                              SnackBar(
+                                content: Text(
+                                  'บันทึกไม่สำเร็จ: ${e.toString().replaceAll("Exception: ", "")}',
+                                ),
+                              ),
                             );
                           }
                         }
@@ -726,11 +1051,25 @@ class _FinancePageState extends State<FinancePage> {
               Container(
                 width: 56,
                 height: 56,
-                decoration: BoxDecoration(color: c.coralSoft, borderRadius: BorderRadius.circular(16)),
-                child: Icon(Icons.delete_outline_rounded, color: c.coral, size: 28),
+                decoration: BoxDecoration(
+                  color: c.coralSoft,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(
+                  Icons.delete_outline_rounded,
+                  color: c.coral,
+                  size: 28,
+                ),
               ),
               const SizedBox(height: 16),
-              Text('ลบรายการจ่ายประจำนี้?', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: c.ink)),
+              Text(
+                'ลบรายการจ่ายประจำนี้?',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: c.ink,
+                ),
+              ),
               const SizedBox(height: 6),
               Text(
                 'ต้องการลบรายการ "${item['title'] ?? ''}" ออกใช่หรือไม่?',
@@ -741,7 +1080,11 @@ class _FinancePageState extends State<FinancePage> {
               Row(
                 children: [
                   Expanded(
-                    child: AppModalButton(label: 'ยกเลิก', onPressed: () => Navigator.pop(ctx), isPrimary: false),
+                    child: AppModalButton(
+                      label: 'ยกเลิก',
+                      onPressed: () => Navigator.pop(ctx),
+                      isPrimary: false,
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -750,7 +1093,9 @@ class _FinancePageState extends State<FinancePage> {
                       isDestructive: true,
                       onPressed: () async {
                         if (item['id'] != null) {
-                          await FinanceApiService.deleteRecurring(item['id'].toString());
+                          await FinanceApiService.deleteRecurring(
+                            item['id'].toString(),
+                          );
                         }
                         if (ctx.mounted) Navigator.pop(ctx);
                         if (parentContext.mounted) Navigator.pop(parentContext);
@@ -781,7 +1126,9 @@ class _FinancePageState extends State<FinancePage> {
       } catch (_) {}
     }
 
-    final searchFrom = startDate.isAfter(firstOfThisMonth) ? startDate : firstOfThisMonth;
+    final searchFrom = startDate.isAfter(firstOfThisMonth)
+        ? startDate
+        : firstOfThisMonth;
 
     DateTime dueDateFor(int y, int m) {
       final daysInMonth = DateTime(y, m + 1, 0).day;
@@ -791,7 +1138,9 @@ class _FinancePageState extends State<FinancePage> {
     var nextDue = dueDateFor(searchFrom.year, searchFrom.month);
     if (nextDue.isBefore(searchFrom)) {
       final nextMonth = searchFrom.month == 12 ? 1 : searchFrom.month + 1;
-      final nextYear = searchFrom.month == 12 ? searchFrom.year + 1 : searchFrom.year;
+      final nextYear = searchFrom.month == 12
+          ? searchFrom.year + 1
+          : searchFrom.year;
       nextDue = dueDateFor(nextYear, nextMonth);
     }
     return nextDue;
@@ -821,12 +1170,20 @@ class _FinancePageState extends State<FinancePage> {
                   color: c.accentSoft,
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: Icon(Icons.check_circle_rounded, color: c.accent, size: 30),
+                child: Icon(
+                  Icons.check_circle_rounded,
+                  color: c.accent,
+                  size: 30,
+                ),
               ),
               const SizedBox(height: 16),
               Text(
                 'ยืนยันการชำระเงิน',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: c.ink),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: c.ink,
+                ),
               ),
               const SizedBox(height: 8),
               Text(
@@ -836,7 +1193,10 @@ class _FinancePageState extends State<FinancePage> {
               ),
               const SizedBox(height: 12),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: c.surface2,
                   borderRadius: BorderRadius.circular(10),
@@ -884,7 +1244,10 @@ class _FinancePageState extends State<FinancePage> {
     );
   }
 
-  Future<void> _executePayRecurring(dynamic item, BuildContext parentContext) async {
+  Future<void> _executePayRecurring(
+    dynamic item,
+    BuildContext parentContext,
+  ) async {
     final userId = await UserSession.getUserId();
     final id = item['id'].toString();
     final title = item['title'] ?? '';
@@ -892,7 +1255,9 @@ class _FinancePageState extends State<FinancePage> {
     final category = item['category'] ?? 'ค่าใช้จ่ายประจำ';
     final isIndefinite = item['isIndefinite'] ?? true;
     final dayOfMonthDue = (item['dayOfMonthDue'] as num?)?.toInt() ?? 1;
-    final endDate = item['endDate'] != null ? DateTime.parse(item['endDate']) : null;
+    final endDate = item['endDate'] != null
+        ? DateTime.parse(item['endDate'])
+        : null;
 
     final currentNextDue = _calculateNextDue(item);
     final newStartDate = currentNextDue.add(const Duration(days: 1));
@@ -930,10 +1295,13 @@ class _FinancePageState extends State<FinancePage> {
           ...item,
           'startDate': newStartDate.toIso8601String(),
         });
-        final fmtNext = '${nextDueAfter.day}/${nextDueAfter.month}/${nextDueAfter.year + 543}';
+        final fmtNext =
+            '${nextDueAfter.day}/${nextDueAfter.month}/${nextDueAfter.year + 543}';
         ScaffoldMessenger.of(parentContext).showSnackBar(
           SnackBar(
-            content: Text('บันทึกรายจ่าย ฿${amt.toStringAsFixed(0)} เรียบร้อยแล้ว (รอบถัดไป: $fmtNext)'),
+            content: Text(
+              'บันทึกรายจ่าย ฿${amt.toStringAsFixed(0)} เรียบร้อยแล้ว (รอบถัดไป: $fmtNext)',
+            ),
             backgroundColor: parentContext.c.accent,
           ),
         );
@@ -941,7 +1309,11 @@ class _FinancePageState extends State<FinancePage> {
     } catch (e) {
       if (parentContext.mounted) {
         ScaffoldMessenger.of(parentContext).showSnackBar(
-          SnackBar(content: Text('เกิดข้อผิดพลาด: ${e.toString().replaceAll("Exception: ", "")}')),
+          SnackBar(
+            content: Text(
+              'เกิดข้อผิดพลาด: ${e.toString().replaceAll("Exception: ", "")}',
+            ),
+          ),
         );
       }
     }
@@ -967,7 +1339,10 @@ class _FinancePageState extends State<FinancePage> {
         child: FloatingActionButton.extended(
           onPressed: _openTransactionModal,
           icon: const Icon(Icons.add_rounded, color: Colors.white),
-          label: const Text('เพิ่มรายการ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+          label: const Text(
+            'เพิ่มรายการ',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+          ),
           backgroundColor: Colors.transparent,
           elevation: 0,
         ),
@@ -977,8 +1352,22 @@ class _FinancePageState extends State<FinancePage> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
           children: [
-            const PageHeader(title: 'รายรับรายจ่าย', subtitle: 'จัดการการเงินของคุณ'),
+            const PageHeader(
+              title: 'รายรับรายจ่าย',
+              subtitle: 'จัดการการเงินของคุณ',
+            ),
             const SizedBox(height: 16),
+
+            // Books Selector
+            if (!_isBooksLoading && _books.isNotEmpty) ...[
+              BookSelector(
+                books: _books,
+                selectedBookId: _selectedBookId,
+                onBookSelected: _onBookSelected,
+                onManageBooks: _onManageBooks,
+              ),
+              const SizedBox(height: 16),
+            ],
 
             if (_isLowBalance)
               Container(
@@ -990,12 +1379,20 @@ class _FinancePageState extends State<FinancePage> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.warning_rounded, color: Colors.white, size: 22),
+                    const Icon(
+                      Icons.warning_rounded,
+                      color: Colors.white,
+                      size: 22,
+                    ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
                         'เงินคงเหลือต่ำกว่า 0.5% ของรายรับทั้งหมด!',
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13),
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
                       ),
                     ),
                   ],
@@ -1007,7 +1404,9 @@ class _FinancePageState extends State<FinancePage> {
                 valueListenable: ApiClient.isConnectingLong,
                 builder: (context, isLong, child) {
                   return ServerConnectingWidget(
-                    message: isLong ? 'กำลังปลุกเซิร์ฟเวอร์...' : 'กำลังดึงรายการการเงิน...',
+                    message: isLong
+                        ? 'กำลังปลุกเซิร์ฟเวอร์...'
+                        : 'กำลังดึงรายการการเงิน...',
                     subMessage: isLong
                         ? 'เซิร์ฟเวอร์กำลังสตาร์ทขึ้นมาใหม่เนื่องจากไม่ได้ใช้งาน โปรดรอสักครู่...'
                         : 'กำลังดึงข้อมูลสรุปรายรับรายจ่ายของคุณ...',
@@ -1016,8 +1415,7 @@ class _FinancePageState extends State<FinancePage> {
               ),
               const SizedBox(height: 16),
               const SkeletonCard(height: 100, borderRadius: 20),
-            ]
-            else ...[
+            ] else ...[
               // Summary Cards
               Row(
                 children: [
@@ -1055,14 +1453,19 @@ class _FinancePageState extends State<FinancePage> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('฿${_netBalance.toStringAsFixed(2)}',
-                            style: TextStyle(
-                                fontSize: 28,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: -0.5,
-                                color: _netBalance >= 0 ? c.good : c.coral)),
+                        Text(
+                          '฿${_netBalance.toStringAsFixed(2)}',
+                          style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -0.5,
+                            color: _netBalance >= 0 ? c.good : c.coral,
+                          ),
+                        ),
                         Icon(
-                          _netBalance >= 0 ? Icons.trending_up_rounded : Icons.trending_down_rounded,
+                          _netBalance >= 0
+                              ? Icons.trending_up_rounded
+                              : Icons.trending_down_rounded,
                           color: _netBalance >= 0 ? c.good : c.coral,
                           size: 28,
                         ),
@@ -1070,35 +1473,53 @@ class _FinancePageState extends State<FinancePage> {
                     ),
                     if (_totalIncome > 0) ...[
                       const SizedBox(height: 14),
-                      Builder(builder: (context) {
-                        final ratio = (_totalExpense / _totalIncome).clamp(0.0, 1.0);
-                        final barColor = ratio >= 0.9 ? c.coral : (ratio >= 0.7 ? c.amber : c.good);
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(20),
-                              child: Container(
-                                height: 8,
-                                color: c.surface2,
-                                child: FractionallySizedBox(
-                                  widthFactor: ratio,
-                                  alignment: Alignment.centerLeft,
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(colors: [barColor, barColor.withValues(alpha: 0.8)]),
-                                      borderRadius: BorderRadius.circular(20),
+                      Builder(
+                        builder: (context) {
+                          final ratio = (_totalExpense / _totalIncome).clamp(
+                            0.0,
+                            1.0,
+                          );
+                          final barColor = ratio >= 0.9
+                              ? c.coral
+                              : (ratio >= 0.7 ? c.amber : c.good);
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(20),
+                                child: Container(
+                                  height: 8,
+                                  color: c.surface2,
+                                  child: FractionallySizedBox(
+                                    widthFactor: ratio,
+                                    alignment: Alignment.centerLeft,
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          colors: [
+                                            barColor,
+                                            barColor.withValues(alpha: 0.8),
+                                          ],
+                                        ),
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text('ใช้จ่ายไปแล้ว ${(ratio * 100).toStringAsFixed(0)}% ของรายรับ',
-                                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w500, color: c.ink3)),
-                          ],
-                        );
-                      }),
+                              const SizedBox(height: 6),
+                              Text(
+                                'ใช้จ่ายไปแล้ว ${(ratio * 100).toStringAsFixed(0)}% ของรายรับ',
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w500,
+                                  color: c.ink3,
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
                     ],
                   ],
                 ),
@@ -1115,55 +1536,89 @@ class _FinancePageState extends State<FinancePage> {
                     ? GestureDetector(
                         onTap: _openRemainingExpensesModal,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
                           decoration: BoxDecoration(
                             color: c.accentSoft,
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          child: Text('ดูทั้งหมด ${_remainingExpenses.length}', style: TextStyle(color: c.accent, fontSize: 12, fontWeight: FontWeight.w700)),
+                          child: Text(
+                            'ดูทั้งหมด ${_remainingExpenses.length}',
+                            style: TextStyle(
+                              color: c.accent,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                         ),
                       )
                     : null,
                 child: _top5Expenses.isNotEmpty
-                    ? Builder(builder: (context) {
-                        final topAmount = (_top5Expenses[0]['amount'] as num).toDouble();
-                        return Column(
-                          children: [
-                            for (var i = 0; i < _top5Expenses.length; i++) ...[
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Container(
-                                    width: 26,
-                                    height: 26,
-                                    margin: const EdgeInsets.only(top: 2),
-                                    decoration: BoxDecoration(
-                                      color: c.coralSoft,
-                                      borderRadius: BorderRadius.circular(8),
+                    ? Builder(
+                        builder: (context) {
+                          final topAmount = (_top5Expenses[0]['amount'] as num)
+                              .toDouble();
+                          return Column(
+                            children: [
+                              for (
+                                var i = 0;
+                                i < _top5Expenses.length;
+                                i++
+                              ) ...[
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Container(
+                                      width: 26,
+                                      height: 26,
+                                      margin: const EdgeInsets.only(top: 2),
+                                      decoration: BoxDecoration(
+                                        color: c.coralSoft,
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Center(
+                                        child: Text(
+                                          '${i + 1}',
+                                          style: TextStyle(
+                                            color: c.coral,
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 12.5,
+                                          ),
+                                        ),
+                                      ),
                                     ),
-                                    child: Center(
-                                      child: Text('${i + 1}', style: TextStyle(color: c.coral, fontWeight: FontWeight.w800, fontSize: 12.5)),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: CategoryBar(
+                                        label:
+                                            _top5Expenses[i]['category'] ?? '',
+                                        amount:
+                                            '฿${(_top5Expenses[i]['amount'] as num).toStringAsFixed(0)}',
+                                        fraction: topAmount > 0
+                                            ? (_top5Expenses[i]['amount']
+                                                      as num) /
+                                                  topAmount
+                                            : 0.0,
+                                        color: c.coral,
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: CategoryBar(
-                                      label: _top5Expenses[i]['category'] ?? '',
-                                      amount: '฿${(_top5Expenses[i]['amount'] as num).toStringAsFixed(0)}',
-                                      fraction: topAmount > 0 ? (_top5Expenses[i]['amount'] as num) / topAmount : 0.0,
-                                      color: c.coral,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              if (i < _top5Expenses.length - 1) const SizedBox(height: 14),
+                                  ],
+                                ),
+                                if (i < _top5Expenses.length - 1)
+                                  const SizedBox(height: 14),
+                              ],
                             ],
-                          ],
-                        );
-                      })
+                          );
+                        },
+                      )
                     : Padding(
                         padding: const EdgeInsets.all(16),
-                        child: Text('ยังไม่มีข้อมูลรายจ่าย', style: TextStyle(color: c.ink3)),
+                        child: Text(
+                          'ยังไม่มีข้อมูลรายจ่าย',
+                          style: TextStyle(color: c.ink3),
+                        ),
                       ),
               ),
               const SizedBox(height: 16),
@@ -1184,54 +1639,89 @@ class _FinancePageState extends State<FinancePage> {
                               onTap: () => _openTransactionModal(t),
                               behavior: HitTestBehavior.opaque,
                               child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 8,
+                                ),
                                 child: Row(
                                   children: [
                                     Container(
                                       width: 36,
                                       height: 36,
                                       decoration: BoxDecoration(
-                                        color: (t['type'] == 0 ? c.good : c.coral).withValues(alpha: 0.12),
+                                        color:
+                                            (_isIncomeType(t['type'])
+                                                    ? c.good
+                                                    : c.coral)
+                                                .withValues(alpha: 0.12),
                                         borderRadius: BorderRadius.circular(10),
                                       ),
                                       child: Icon(
-                                        t['type'] == 0 ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded,
-                                        color: t['type'] == 0 ? c.good : c.coral,
+                                        _isIncomeType(t['type'])
+                                            ? Icons.arrow_downward_rounded
+                                            : Icons.arrow_upward_rounded,
+                                        color: _isIncomeType(t['type'])
+                                            ? c.good
+                                            : c.coral,
                                         size: 18,
                                       ),
                                     ),
                                     const SizedBox(width: 12),
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
-                                          Text(t['note'] ?? t['category'] ?? '', style: TextStyle(fontWeight: FontWeight.w600, color: c.ink)),
-                                          Text(t['category'] ?? '', style: TextStyle(fontSize: 12, color: c.ink3)),
+                                          Text(
+                                            t['note'] ?? t['category'] ?? '',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              color: c.ink,
+                                            ),
+                                          ),
+                                          Text(
+                                            t['category'] ?? '',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: c.ink3,
+                                            ),
+                                          ),
                                         ],
                                       ),
                                     ),
                                     Text(
-                                      '฿${(t['amount'] as num).toStringAsFixed(0)}',
+                                      '${_isIncomeType(t['type']) ? '+' : '-'}฿${(t['amount'] as num).toStringAsFixed(0)}',
                                       style: TextStyle(
                                         fontWeight: FontWeight.w800,
-                                        color: t['type'] == 0 ? c.good : c.coral,
+                                        color: _isIncomeType(t['type'])
+                                            ? c.good
+                                            : c.coral,
                                         fontSize: 15,
                                       ),
                                     ),
                                     const SizedBox(width: 4),
-                                    Icon(Icons.chevron_right_rounded, size: 18, color: c.ink3),
+                                    Icon(
+                                      Icons.chevron_right_rounded,
+                                      size: 18,
+                                      color: c.ink3,
+                                    ),
                                   ],
                                 ),
                               ),
                             ),
                             if (t != _transactions.take(10).last)
-                              Divider(height: 1, color: c.border.withValues(alpha: 0.5)),
+                              Divider(
+                                height: 1,
+                                color: c.border.withValues(alpha: 0.5),
+                              ),
                           ],
                         ],
                       )
                     : Padding(
                         padding: const EdgeInsets.all(16),
-                        child: Text('ยังไม่มีธุรกรรม กด + เพื่อเพิ่มรายการแรก', style: TextStyle(color: c.ink3)),
+                        child: Text(
+                          'ยังไม่มีธุรกรรม กด + เพื่อเพิ่มรายการแรก',
+                          style: TextStyle(color: c.ink3),
+                        ),
                       ),
               ),
               const SizedBox(height: 16),
@@ -1253,13 +1743,18 @@ class _FinancePageState extends State<FinancePage> {
     ];
 
     final labels = _breakdownData.map((e) => '${e['label']}').toList();
-    final incomes = _breakdownData.map((e) => (e['income'] as num).toDouble()).toList();
-    final expenses = _breakdownData.map((e) => (e['expense'] as num).toDouble()).toList();
+    final incomes = _breakdownData
+        .map((e) => (e['income'] as num).toDouble())
+        .toList();
+    final expenses = _breakdownData
+        .map((e) => (e['expense'] as num).toDouble())
+        .toList();
     final maxV = [...incomes, ...expenses, 1.0].reduce((a, b) => a > b ? a : b);
 
     String rangeLabel;
     if (_breakdownPeriod == 'daily') {
-      rangeLabel = '${_breakdownMonth.toString().padLeft(2, '0')}/${_breakdownYear + 543}';
+      rangeLabel =
+          '${_breakdownMonth.toString().padLeft(2, '0')}/${_breakdownYear + 543}';
     } else if (_breakdownPeriod == 'monthly') {
       rangeLabel = '${_breakdownYear + 543}';
     } else {
@@ -1287,9 +1782,15 @@ class _FinancePageState extends State<FinancePage> {
                       color: selected ? c.accent : c.surface2,
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Text(p[1],
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: selected ? Colors.white : c.ink3)),
+                    child: Text(
+                      p[1],
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: selected ? Colors.white : c.ink3,
+                      ),
+                    ),
                   ),
                 ),
               );
@@ -1308,7 +1809,14 @@ class _FinancePageState extends State<FinancePage> {
                     onTap: () => _shiftBreakdownRange(-1),
                     child: Icon(Icons.chevron_left_rounded, color: c.ink3),
                   ),
-                  Text(rangeLabel, style: TextStyle(fontWeight: FontWeight.w700, color: c.ink, fontSize: 13.5)),
+                  Text(
+                    rangeLabel,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: c.ink,
+                      fontSize: 13.5,
+                    ),
+                  ),
                   GestureDetector(
                     onTap: () => _shiftBreakdownRange(1),
                     child: Icon(Icons.chevron_right_rounded, color: c.ink3),
@@ -1325,14 +1833,27 @@ class _FinancePageState extends State<FinancePage> {
           else if (labels.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 24),
-              child: Center(child: Text('ยังไม่มีข้อมูล', style: TextStyle(color: c.ink3, fontSize: 13))),
+              child: Center(
+                child: Text(
+                  'ยังไม่มีข้อมูล',
+                  style: TextStyle(color: c.ink3, fontSize: 13),
+                ),
+              ),
             )
           else ...[
             Row(
               children: [
-                TrendLegend(color: c.good, icon: Icons.arrow_upward_rounded, label: 'รายรับ (เส้นทึบ)'),
+                TrendLegend(
+                  color: c.good,
+                  icon: Icons.arrow_upward_rounded,
+                  label: 'รายรับ (เส้นทึบ)',
+                ),
                 const SizedBox(width: 16),
-                TrendLegend(color: c.coral, icon: Icons.arrow_downward_rounded, label: 'รายจ่าย (เส้นประ)'),
+                TrendLegend(
+                  color: c.coral,
+                  icon: Icons.arrow_downward_rounded,
+                  label: 'รายจ่าย (เส้นประ)',
+                ),
               ],
             ),
             const SizedBox(height: 12),
@@ -1352,7 +1873,8 @@ class _FinancePageState extends State<FinancePage> {
               height: 220,
               child: ListView.separated(
                 itemCount: _breakdownData.length,
-                separatorBuilder: (_, _) => Divider(height: 1, color: c.border.withValues(alpha: 0.5)),
+                separatorBuilder: (_, _) =>
+                    Divider(height: 1, color: c.border.withValues(alpha: 0.5)),
                 itemBuilder: (context, i) {
                   final row = _breakdownData[i];
                   final income = (row['income'] as num).toDouble();
@@ -1362,19 +1884,49 @@ class _FinancePageState extends State<FinancePage> {
                     padding: const EdgeInsets.symmetric(vertical: 9),
                     child: Row(
                       children: [
-                        SizedBox(width: 36, child: Text('${row['label']}', style: TextStyle(fontWeight: FontWeight.w700, color: c.ink, fontSize: 13))),
-                        Expanded(
-                          child: Text('+฿${income.toStringAsFixed(0)}',
-                              textAlign: TextAlign.right, style: TextStyle(color: c.good, fontWeight: FontWeight.w600, fontSize: 12.5)),
+                        SizedBox(
+                          width: 36,
+                          child: Text(
+                            '${row['label']}',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: c.ink,
+                              fontSize: 13,
+                            ),
+                          ),
                         ),
                         Expanded(
-                          child: Text('-฿${expense.toStringAsFixed(0)}',
-                              textAlign: TextAlign.right, style: TextStyle(color: c.coral, fontWeight: FontWeight.w600, fontSize: 12.5)),
+                          child: Text(
+                            '+฿${income.toStringAsFixed(0)}',
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              color: c.good,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12.5,
+                            ),
+                          ),
                         ),
                         Expanded(
-                          child: Text('฿${net.toStringAsFixed(0)}',
-                              textAlign: TextAlign.right,
-                              style: TextStyle(color: net >= 0 ? c.ink : c.coral, fontWeight: FontWeight.w800, fontSize: 12.5)),
+                          child: Text(
+                            '-฿${expense.toStringAsFixed(0)}',
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              color: c.coral,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12.5,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            '฿${net.toStringAsFixed(0)}',
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              color: net >= 0 ? c.ink : c.coral,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 12.5,
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -1389,13 +1941,21 @@ class _FinancePageState extends State<FinancePage> {
   }
 
   Widget _buildRecurringSection(AppColors c) {
-    final fixed = _recurringExpenses.where((r) => r['isIndefinite'] != true).toList();
-    final indefinite = _recurringExpenses.where((r) => r['isIndefinite'] == true).toList();
+    final fixed = _recurringExpenses
+        .where((r) => r['isIndefinite'] != true)
+        .toList();
+    final indefinite = _recurringExpenses
+        .where((r) => r['isIndefinite'] == true)
+        .toList();
 
     Widget buildRow(dynamic r) {
       final day = (r['dayOfMonthDue'] as num?)?.toInt() ?? 1;
-      final startDate = r['startDate'] != null ? DateTime.parse(r['startDate']) : null;
-      final endDate = r['endDate'] != null ? DateTime.parse(r['endDate']) : null;
+      final startDate = r['startDate'] != null
+          ? DateTime.parse(r['startDate'])
+          : null;
+      final endDate = r['endDate'] != null
+          ? DateTime.parse(r['endDate'])
+          : null;
       String rangeText = '';
       if (startDate != null) {
         rangeText = endDate != null
@@ -1405,71 +1965,230 @@ class _FinancePageState extends State<FinancePage> {
 
       // คำนวณวันครบกำหนดจ่ายครั้งถัดไป เพื่อแสดงป้ายนับถอยหลัง
       final nextDue = _calculateNextDue(r);
-      final today = DateTime.now();
-      final todayOnly = DateTime(today.year, today.month, today.day);
+      final now = DateTime.now();
+      final todayOnly = DateTime(now.year, now.month, now.day);
       final daysUntil = nextDue.difference(todayOnly).inDays;
+
+      // คำนวณ countdown แบบละเอียด (วัน ชม:นาที:วินาที)
+      final dueTarget = DateTime(
+        nextDue.year,
+        nextDue.month,
+        nextDue.day,
+        23,
+        59,
+        59,
+      );
+      final remaining = dueTarget.difference(now);
+
+      String countdownText;
+      if (remaining.isNegative) {
+        countdownText = 'เลยกำหนด';
+      } else if (daysUntil == 0) {
+        // ครบกำหนดวันนี้ - แสดงแค่ ชม:นาที:วินาที
+        final h = remaining.inHours.toString().padLeft(2, '0');
+        final m = remaining.inMinutes.remainder(60).toString().padLeft(2, '0');
+        final s = remaining.inSeconds.remainder(60).toString().padLeft(2, '0');
+        countdownText = '$h:$m:$s';
+      } else {
+        // เหลือหลายวัน - แสดง X วัน HH:MM:SS
+        final h = remaining.inHours.remainder(24).toString().padLeft(2, '0');
+        final m = remaining.inMinutes.remainder(60).toString().padLeft(2, '0');
+        final s = remaining.inSeconds.remainder(60).toString().padLeft(2, '0');
+        countdownText = '$daysUntil วัน $h:$m:$s';
+      }
+
       final dueLabel = daysUntil == 0
           ? 'ครบกำหนดวันนี้'
-          : (daysUntil < 0 ? 'เลยกำหนด ${daysUntil.abs()} วัน' : 'อีก $daysUntil วัน');
-      final Color dueFg = daysUntil <= 0 ? c.coral : (daysUntil <= 3 ? c.amber : c.ink3);
-      final Color dueBg = daysUntil <= 0 ? c.coralSoft : (daysUntil <= 3 ? c.amberSoft : c.surface2);
+          : (daysUntil < 0
+                ? 'เลยกำหนด ${daysUntil.abs()} วัน'
+                : 'อีก $daysUntil วัน');
+      final Color dueFg = daysUntil <= 0
+          ? c.coral
+          : (daysUntil <= 3 ? c.amber : c.ink3);
+      final Color dueBg = daysUntil <= 0
+          ? c.coralSoft
+          : (daysUntil <= 3 ? c.amberSoft : c.surface2);
+
+      // คำนวณ progress bar (จากวันที่เริ่มรอบจนถึงวันครบกำหนด)
+      final itemStartDate = startDate ?? DateTime(now.year, now.month, 1);
+      final totalDuration = nextDue
+          .difference(itemStartDate)
+          .inSeconds
+          .toDouble();
+      final elapsed = now.difference(itemStartDate).inSeconds.toDouble();
+      final progress = totalDuration > 0
+          ? (elapsed / totalDuration).clamp(0.0, 1.0)
+          : 0.0;
 
       return GestureDetector(
         onTap: () => _openRecurringModal(r),
         behavior: HitTestBehavior.opaque,
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 10),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(color: c.amberSoft, borderRadius: BorderRadius.circular(10)),
-                child: Icon(Icons.event_repeat_rounded, color: c.amber, size: 18),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(r['title'] ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w600, color: c.ink)),
-                    Text('จ่ายทุกวันที่ $day${rangeText.isNotEmpty ? ' • $rangeText' : ''}',
-                        maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5, color: c.ink3)),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 6),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Text('฿${(r['amount'] as num).toStringAsFixed(0)}', style: TextStyle(fontWeight: FontWeight.w800, color: c.ink, fontSize: 13.5)),
-                  const SizedBox(height: 3),
-                  Pill(dueLabel, fg: dueFg, bg: dueBg),
-                ],
-              ),
-              const SizedBox(width: 8),
-              GestureDetector(
-                onTap: () => _confirmPayRecurring(r, context),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                  decoration: BoxDecoration(
-                    color: c.accentSoft,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: c.accent.withValues(alpha: 0.3)),
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: c.amberSoft,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      Icons.event_repeat_rounded,
+                      color: c.amber,
+                      size: 18,
+                    ),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          r['title'] ?? '',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: c.ink,
+                          ),
+                        ),
+                        Text(
+                          'จ่ายทุกวันที่ $day${rangeText.isNotEmpty ? ' • $rangeText' : ''}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 11.5, color: c.ink3),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Icon(Icons.check_circle_rounded, size: 15, color: c.accent),
-                      const SizedBox(width: 4),
                       Text(
-                        'จ่ายแล้ว',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: c.accent),
+                        '฿${(r['amount'] as num).toStringAsFixed(0)}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          color: c.ink,
+                          fontSize: 13.5,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Pill(dueLabel, fg: dueFg, bg: dueBg),
+                      const SizedBox(height: 3),
+                      // แสดง countdown แบบ real-time
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: daysUntil <= 0
+                                ? [c.coral, c.amber]
+                                : [c.amber, c.accent],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          countdownText,
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.white,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
                       ),
                     ],
                   ),
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: () => _confirmPayRecurring(r, context),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 7,
+                      ),
+                      decoration: BoxDecoration(
+                        color: c.accentSoft,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: c.accent.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.check_circle_rounded,
+                            size: 15,
+                            color: c.accent,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'จ่ายแล้ว',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: c.accent,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              // Progress bar แสดงความคืบหน้า
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: c.surface2,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: FractionallySizedBox(
+                    widthFactor: progress,
+                    alignment: Alignment.centerLeft,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: daysUntil <= 0
+                              ? [c.coral, c.amber]
+                              : progress > 0.7
+                              ? [c.amber, c.coral]
+                              : [c.accent, c.amber],
+                        ),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
                 ),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Text(
+                    '${(progress * 100).toStringAsFixed(0)}%',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: daysUntil <= 0 ? c.coral : c.ink3,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -1486,31 +2205,62 @@ class _FinancePageState extends State<FinancePage> {
         onTap: () => _openRecurringModal(),
         child: Container(
           padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(gradient: c.accentGradient, borderRadius: BorderRadius.circular(10)),
+          decoration: BoxDecoration(
+            gradient: c.accentGradient,
+            borderRadius: BorderRadius.circular(10),
+          ),
           child: const Icon(Icons.add_rounded, color: Colors.white, size: 18),
         ),
       ),
       child: _recurringExpenses.isEmpty
           ? Padding(
               padding: const EdgeInsets.all(16),
-              child: Text('ยังไม่มีรายการจ่ายประจำ กด + เพื่อเพิ่ม', style: TextStyle(color: c.ink3)),
+              child: Text(
+                'ยังไม่มีรายการจ่ายประจำ กด + เพื่อเพิ่ม',
+                style: TextStyle(color: c.ink3),
+              ),
             )
           : Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (fixed.isNotEmpty) ...[
-                  Text('มีกำหนดระยะเวลา', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: c.ink3, letterSpacing: 0.3)),
+                  Text(
+                    'มีกำหนดระยะเวลา',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: c.ink3,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
                   for (var i = 0; i < fixed.length; i++) ...[
                     buildRow(fixed[i]),
-                    if (i < fixed.length - 1) Divider(height: 1, color: c.border.withValues(alpha: 0.5)),
+                    if (i < fixed.length - 1)
+                      Divider(
+                        height: 1,
+                        color: c.border.withValues(alpha: 0.5),
+                      ),
                   ],
                 ],
-                if (fixed.isNotEmpty && indefinite.isNotEmpty) const SizedBox(height: 12),
+                if (fixed.isNotEmpty && indefinite.isNotEmpty)
+                  const SizedBox(height: 12),
                 if (indefinite.isNotEmpty) ...[
-                  Text('ไม่มีกำหนดสิ้นสุด', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: c.ink3, letterSpacing: 0.3)),
+                  Text(
+                    'ไม่มีกำหนดสิ้นสุด',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: c.ink3,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
                   for (var i = 0; i < indefinite.length; i++) ...[
                     buildRow(indefinite[i]),
-                    if (i < indefinite.length - 1) Divider(height: 1, color: c.border.withValues(alpha: 0.5)),
+                    if (i < indefinite.length - 1)
+                      Divider(
+                        height: 1,
+                        color: c.border.withValues(alpha: 0.5),
+                      ),
                   ],
                 ],
               ],
@@ -1541,10 +2291,20 @@ class _SummaryCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        gradient: gradient ?? LinearGradient(colors: colors!, begin: Alignment.topLeft, end: Alignment.bottomRight),
+        gradient:
+            gradient ??
+            LinearGradient(
+              colors: colors!,
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
-          BoxShadow(color: glowColor.withValues(alpha: 0.25), blurRadius: 12, offset: const Offset(0, 4)),
+          BoxShadow(
+            color: glowColor.withValues(alpha: 0.25),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
         ],
       ),
       child: Stack(
@@ -1552,7 +2312,11 @@ class _SummaryCard extends StatelessWidget {
           Positioned(
             right: -14,
             bottom: -14,
-            child: Icon(icon, size: 74, color: Colors.white.withValues(alpha: 0.14)),
+            child: Icon(
+              icon,
+              size: 74,
+              color: Colors.white.withValues(alpha: 0.14),
+            ),
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1560,13 +2324,30 @@ class _SummaryCard extends StatelessWidget {
               Container(
                 width: 30,
                 height: 30,
-                decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.18), borderRadius: BorderRadius.circular(9)),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(9),
+                ),
                 child: Icon(icon, color: Colors.white, size: 16),
               ),
               const SizedBox(height: 10),
-              Text(label, style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 13, fontWeight: FontWeight.w500)),
+              Text(
+                label,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.9),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
               const SizedBox(height: 4),
-              Text('฿${amount.toStringAsFixed(0)}', style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
+              Text(
+                '฿${amount.toStringAsFixed(0)}',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
             ],
           ),
         ],
@@ -1574,4 +2355,3 @@ class _SummaryCard extends StatelessWidget {
     );
   }
 }
-

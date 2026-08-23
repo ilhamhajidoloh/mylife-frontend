@@ -60,8 +60,17 @@ class ApiConfig {
     return '$baseUrl/api/finance/breakdown/$userId?$query';
   }
 
+  // Books API
+  static String books(String userId) => '$baseUrl/api/books/$userId';
+  static String get bookCreate => '$baseUrl/api/books';
+  static String bookItem(String id) => '$baseUrl/api/books/$id';
+
   static String scheduleTerms(String userId) => '$baseUrl/api/schedule/terms/$userId';
   static String scheduleTodayClasses(String userId) => '$baseUrl/api/schedule/today-classes/$userId';
+  static String get scheduleTermCreate => '$baseUrl/api/schedule/terms';
+  static String scheduleTermItem(String id) => '$baseUrl/api/schedule/terms/$id';
+  static String scheduleByTerm(String userId, String termId) => '$baseUrl/api/schedule/$userId/term/$termId';
+  static String scheduleStats(String userId, String termId) => '$baseUrl/api/schedule/stats/$userId/$termId';
 
   static String activity(String userId) => '$baseUrl/api/activity/$userId';
   static String activityTimeline(String userId) => '$baseUrl/api/activity/timeline/$userId';

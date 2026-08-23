@@ -18,7 +18,7 @@ class SchedulePage extends StatefulWidget {
   State<SchedulePage> createState() => _SchedulePageState();
 }
 
-class _SchedulePageState extends State<SchedulePage> {
+class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver {
   bool _isLoading = true;
   String _termName = 'ยังไม่ได้ตั้งค่าภาคเรียน';
   String? _termId;
@@ -31,19 +31,45 @@ class _SchedulePageState extends State<SchedulePage> {
 
   Timer? _timer;
   DateTime _now = DateTime.now();
+  bool _isBlinking = false;
+  Timer? _blinkTimer;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadScheduleData();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() => _now = DateTime.now());
+    });
+    _startBlinkAnimation();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _startBlinkAnimation();
+    }
+  }
+
+  void _startBlinkAnimation() {
+    _blinkTimer?.cancel();
+    setState(() => _isBlinking = true);
+    _blinkTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) {
+      if (timer.tick >= 6) {
+        timer.cancel();
+        if (mounted) setState(() => _isBlinking = false);
+      } else {
+        if (mounted) setState(() => _isBlinking = !_isBlinking);
+      }
     });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
+    _blinkTimer?.cancel();
     super.dispose();
   }
 
@@ -1306,11 +1332,12 @@ class _SchedulePageState extends State<SchedulePage> {
 
           // Card
           Expanded(
-            child: Container(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
               margin: EdgeInsets.only(bottom: isLast ? 0 : 8),
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: bgColor,
+                color: (isCurrent || isNext) && _isBlinking ? color : bgColor,
                 borderRadius: BorderRadius.circular(14),
                 border: isCurrent ? Border.all(color: c.accent.withValues(alpha: 0.3)) : null,
               ),
@@ -1328,21 +1355,21 @@ class _SchedulePageState extends State<SchedulePage> {
                                 style: TextStyle(
                                   fontWeight: FontWeight.w700,
                                   fontSize: 14,
-                                  color: isPast ? c.ink3 : c.ink,
+                                  color: (isCurrent || isNext) && _isBlinking ? Colors.white : (isPast ? c.ink3 : c.ink),
                                 ),
                               ),
                             ),
                             if (isCurrent)
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(color: c.accent, borderRadius: BorderRadius.circular(8)),
-                                child: const Text('กำลังเรียน', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white)),
+                                decoration: BoxDecoration(color: _isBlinking ? Colors.white : c.accent, borderRadius: BorderRadius.circular(8)),
+                                child: Text('กำลังเรียน', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: _isBlinking ? c.accent : Colors.white)),
                               ),
                             if (isNext)
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(color: c.blue.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
-                                child: Text('ถัดไป', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: c.blue)),
+                                decoration: BoxDecoration(color: _isBlinking ? Colors.white : c.blue.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
+                                child: Text('ถัดไป', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: _isBlinking ? c.blue : c.blue)),
                               ),
                             if (isPast)
                               Container(
@@ -1355,23 +1382,23 @@ class _SchedulePageState extends State<SchedulePage> {
                         const SizedBox(height: 4),
                         Row(
                           children: [
-                            Icon(Icons.access_time_rounded, size: 13, color: c.ink3),
+                            Icon(Icons.access_time_rounded, size: 13, color: (isCurrent || isNext) && _isBlinking ? Colors.white70 : c.ink3),
                             const SizedBox(width: 4),
                             Text(
                               '${course['startTime'] ?? ''} - ${course['endTime'] ?? ''} น.',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: c.ink3),
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: (isCurrent || isNext) && _isBlinking ? Colors.white70 : c.ink3),
                             ),
                             const SizedBox(width: 12),
-                            Icon(Icons.meeting_room_rounded, size: 13, color: c.ink3),
+                            Icon(Icons.meeting_room_rounded, size: 13, color: (isCurrent || isNext) && _isBlinking ? Colors.white70 : c.ink3),
                             const SizedBox(width: 4),
                             Flexible(
                               child: Text(
                                 course['room'] ?? '',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: c.ink3),
+                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: (isCurrent || isNext) && _isBlinking ? Colors.white70 : c.ink3),
                               ),
                             ),
                           ],
@@ -1381,14 +1408,14 @@ class _SchedulePageState extends State<SchedulePage> {
                             padding: const EdgeInsets.only(top: 4),
                             child: Row(
                               children: [
-                                Icon(Icons.person_rounded, size: 13, color: c.ink3),
+                                Icon(Icons.person_rounded, size: 13, color: (isCurrent || isNext) && _isBlinking ? Colors.white70 : c.ink3),
                                 const SizedBox(width: 4),
                                 Flexible(
                                   child: Text(
                                     course['instructor'],
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: c.ink3),
+                                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: (isCurrent || isNext) && _isBlinking ? Colors.white70 : c.ink3),
                                   ),
                                 ),
                               ],
@@ -1400,18 +1427,18 @@ class _SchedulePageState extends State<SchedulePage> {
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                               decoration: BoxDecoration(
-                                color: color.withValues(alpha: 0.12),
+                                color: _isBlinking ? Colors.white.withValues(alpha: 0.2) : color.withValues(alpha: 0.12),
                                 borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: color.withValues(alpha: 0.25)),
+                                border: Border.all(color: _isBlinking ? Colors.white.withValues(alpha: 0.4) : color.withValues(alpha: 0.25)),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.timer_rounded, size: 13, color: color),
+                                  Icon(Icons.timer_rounded, size: 13, color: (isCurrent || isNext) && _isBlinking ? Colors.white : color),
                                   const SizedBox(width: 5),
                                   Text(
                                     '$countdownLabel $countdownText',
-                                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: color),
+                                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: (isCurrent || isNext) && _isBlinking ? Colors.white : color),
                                   ),
                                 ],
                               ),

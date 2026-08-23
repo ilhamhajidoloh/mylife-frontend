@@ -564,3 +564,44 @@ class NotificationApiService {
     return await ApiClient.get(ApiConfig.notification(userId));
   }
 }
+
+class BookApiService {
+  static Future<dynamic> getBooks(String userId) async {
+    return await ApiClient.get(ApiConfig.books(userId));
+  }
+
+  static Future<dynamic> createBook({
+    required String userId,
+    required String name,
+    String icon = '📔',
+    String color = 'violet',
+    bool isDefault = false,
+  }) async {
+    return await ApiClient.post(ApiConfig.bookCreate, {
+      'userId': userId,
+      'name': name,
+      'icon': icon,
+      'color': color,
+      'isDefault': isDefault,
+    });
+  }
+
+  static Future<dynamic> updateBook(
+    String bookId, {
+    String? name,
+    String? icon,
+    String? color,
+    bool? isDefault,
+  }) async {
+    final data = <String, dynamic>{};
+    if (name != null) data['name'] = name;
+    if (icon != null) data['icon'] = icon;
+    if (color != null) data['color'] = color;
+    if (isDefault != null) data['isDefault'] = isDefault;
+    return await ApiClient.put(ApiConfig.bookItem(bookId), data);
+  }
+
+  static Future<dynamic> deleteBook(String bookId) async {
+    return await ApiClient.delete(ApiConfig.bookItem(bookId));
+  }
+}
