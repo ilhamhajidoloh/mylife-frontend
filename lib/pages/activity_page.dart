@@ -268,11 +268,44 @@ class _ActivityPageState extends State<ActivityPage> {
       return ActivityTimeType.multiDay;
     if (act['isAllDay'] == true ||
         act['isAllDay'] == 'true' ||
-        act['isAllDay'] == 1)
+        act['isAllDay'] == 1) {
       return ActivityTimeType.allDay;
+    }
     final recurrence = _parseRecurrence(act['recurrence']);
     if (recurrence != 0) return ActivityTimeType.recurring;
     return ActivityTimeType.timed;
+  }
+
+  /// คำนวณ progress สำหรับกิจกรรมที่กำลังดำเนินการ (หลอดลดลงตามเวลาที่เหลือ)
+  double? _calculateOngoingProgress(dynamic act) {
+    if (act == null) return null;
+    final startStr = act['startTime']?.toString();
+    final endStr = act['endTime']?.toString();
+    if (startStr == null || endStr == null) return null;
+    final start = DateTime.tryParse(startStr)?.toLocal();
+    final end = DateTime.tryParse(endStr)?.toLocal();
+    if (start == null || end == null || !end.isAfter(start)) return null;
+
+    final totalSec = end.difference(start).inSeconds;
+    if (totalSec <= 0) return null;
+    final now = DateTime.now();
+    final remSec = end.difference(now).inSeconds;
+    // หลอดลดลงตามเวลาที่เหลือ (1.0 เมื่อเริ่ม -> 0.0 เมื่อหมดเวลา)
+    return (remSec / totalSec).clamp(0.0, 1.0);
+  }
+
+  /// คำนวณ progress สำหรับกิจกรรมถัดไป (หลอดเพิ่มขึ้นในรอบ 30 วัน ถ้ายังไม่ถึง 30 วัน ไม่ต้องขึ้น)
+  double? _calculateNextActivityProgress(dynamic act, Duration remaining) {
+    if (act == null) return null;
+    final remSec = remaining.inSeconds;
+    const thirtyDaysInSeconds = 30 * 24 * 3600; // 2,592,000 วินาที
+
+    // ถ้าเหลือมากกว่า 30 วัน (ยังไม่ถึงรอบ 30 วัน) -> ไม่ต้องแสดง progress bar
+    if (remSec > thirtyDaysInSeconds) return null;
+    if (remSec <= 0) return 1.0;
+
+    // หลอดเพิ่มขึ้นตามเวลาที่นับถอยหลังเข้าใกล้เวลาเริ่ม (0% ที่ 30 วัน -> 100% เมื่อถึงเวลา)
+    return (1.0 - (remSec / thirtyDaysInSeconds)).clamp(0.0, 1.0);
   }
 
   void _openActivityModal([dynamic item]) {
@@ -1094,15 +1127,22 @@ class _ActivityPageState extends State<ActivityPage> {
               // Countdown Hero Card
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(24),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 22,
+                  vertical: 26,
+                ),
                 decoration: BoxDecoration(
                   gradient: c.heroGradient,
-                  borderRadius: BorderRadius.circular(24),
+                  borderRadius: BorderRadius.circular(26),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.18),
+                    width: 1.2,
+                  ),
                   boxShadow: [
                     BoxShadow(
                       color: c.accent.withValues(alpha: 0.35),
-                      blurRadius: 20,
-                      offset: const Offset(0, 8),
+                      blurRadius: 28,
+                      offset: const Offset(0, 10),
                     ),
                   ],
                 ),
@@ -1110,66 +1150,148 @@ class _ActivityPageState extends State<ActivityPage> {
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 5,
+                        horizontal: 14,
+                        vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
+                        color: Colors.white.withValues(alpha: 0.18),
                         borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.2),
+                        ),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(
-                            Icons.timer_outlined,
-                            color: Colors.white,
-                            size: 16,
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Color(0xFF4ADE80),
+                            ),
                           ),
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 8),
                           Text(
-                            'กิจกรรมถัดไป',
+                            'LIVE COUNTDOWN',
                             style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white.withValues(alpha: 0.9),
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.8,
+                              color: Colors.white.withValues(alpha: 0.95),
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 18),
                     Text(
                       _formatDuration(_remainingTime),
                       style: const TextStyle(
-                        fontSize: 42,
+                        fontSize: 44,
                         fontWeight: FontWeight.w900,
                         color: Colors.white,
-                        letterSpacing: 3,
+                        letterSpacing: 2,
+                        height: 1.1,
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 10),
                     Text(
                       _timeline?['next']?['title']?.toString() ??
                           'ไม่มีกิจกรรมถัดไป',
                       style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
                         color: Colors.white,
+                        letterSpacing: -0.3,
                       ),
                       textAlign: TextAlign.center,
                     ),
                     if (_timeline?['next']?['location'] != null &&
                         _timeline!['next']['location'].toString().isNotEmpty)
                       Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(
-                          _timeline!['next']['location'].toString(),
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.white.withValues(alpha: 0.8),
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.place_rounded,
+                                size: 13,
+                                color: Colors.white,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                _timeline!['next']['location'].toString(),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white.withValues(alpha: 0.9),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
+                    // Progress Bar กิจกรรมถัดไป (นับในรอบ 30 วัน ถ้ายังไม่ถึงรอบ 30 วัน จะไม่แสดง)
+                    () {
+                      final nextProgress = _calculateNextActivityProgress(
+                        _timeline?['next'],
+                        _remainingTime,
+                      );
+                      if (nextProgress == null) return const SizedBox.shrink();
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 18),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'นับถอยหลังรอบ 30 วัน',
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white.withValues(alpha: 0.85),
+                                  ),
+                                ),
+                                Text(
+                                  '${(nextProgress * 100).toStringAsFixed(0)}%',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w900,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: LinearProgressIndicator(
+                                value: nextProgress,
+                                backgroundColor: Colors.white.withValues(
+                                  alpha: 0.22,
+                                ),
+                                valueColor: const AlwaysStoppedAnimation(
+                                  Color(0xFF4ADE80),
+                                ),
+                                minHeight: 7,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }(),
                   ],
                 ),
               ),
@@ -1183,6 +1305,7 @@ class _ActivityPageState extends State<ActivityPage> {
                     _timeline!['current'],
                     c.accent,
                     Icons.play_circle_fill_rounded,
+                    isCurrent: true,
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -1229,66 +1352,116 @@ class _ActivityPageState extends State<ActivityPage> {
     );
   }
 
-  Widget _buildTimelineCard(dynamic item, Color accent, IconData icon) {
+  Widget _buildTimelineCard(
+    dynamic item,
+    Color accent,
+    IconData icon, {
+    bool isCurrent = false,
+  }) {
     final c = context.c;
+    final ongoingProgress = isCurrent ? _calculateOngoingProgress(item) : null;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 0),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: accent.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: accent.withValues(alpha: 0.2)),
+        color: isCurrent
+            ? c.accentSoft.withValues(alpha: 0.4)
+            : accent.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: accent.withValues(alpha: isCurrent ? 0.35 : 0.2),
+        ),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: accent.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, color: accent, size: 22),
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: accent, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item['title']?.toString() ?? '',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: c.ink,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      [
+                        if (item['startTime'] != null)
+                          '${item['startTime']}'
+                              .substring(
+                                0,
+                                ('${item['startTime']}'.length >= 10
+                                    ? 10
+                                    : '${item['startTime']}'.length),
+                              )
+                              .split('T')
+                              .first,
+                        if (item['location'] != null &&
+                            item['location'].toString().isNotEmpty)
+                          item['location'].toString(),
+                      ].where((s) => s.isNotEmpty).join(' • '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12, color: c.ink3),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          if (ongoingProgress != null) ...[
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  item['title']?.toString() ?? '',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  'เวลาที่เหลือ (กำลังลดลง)',
                   style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: c.ink,
-                    fontSize: 14,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: c.ink3,
                   ),
                 ),
-                const SizedBox(height: 2),
                 Text(
-                  [
-                    if (item['startTime'] != null)
-                      '${item['startTime']}'
-                          .substring(
-                            0,
-                            ('${item['startTime']}'.length >= 10
-                                ? 10
-                                : '${item['startTime']}'.length),
-                          )
-                          .split('T')
-                          .first,
-                    if (item['location'] != null &&
-                        item['location'].toString().isNotEmpty)
-                      item['location'].toString(),
-                  ].where((s) => s.isNotEmpty).join(' • '),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 12, color: c.ink3),
+                  '${(ongoingProgress * 100).toStringAsFixed(0)}%',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: accent,
+                  ),
                 ),
               ],
             ),
-          ),
+            const SizedBox(height: 6),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: LinearProgressIndicator(
+                value: ongoingProgress,
+                backgroundColor: c.surface2,
+                valueColor: AlwaysStoppedAnimation(accent),
+                minHeight: 6,
+              ),
+            ),
+          ],
         ],
       ),
     );

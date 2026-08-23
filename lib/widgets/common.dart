@@ -17,7 +17,7 @@ class SectionCard extends StatelessWidget {
     this.caption,
     this.trailing,
     required this.child,
-    this.padding = const EdgeInsets.fromLTRB(18, 18, 18, 20),
+    this.padding = const EdgeInsets.fromLTRB(20, 20, 20, 22),
     this.gradient,
     this.icon,
     this.iconColor,
@@ -26,17 +26,29 @@ class SectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.c;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       width: double.infinity,
       padding: padding,
       decoration: BoxDecoration(
         color: gradient == null ? c.surface : null,
         gradient: gradient,
-        borderRadius: BorderRadius.circular(20),
-        border: gradient == null ? Border.all(color: c.border.withValues(alpha: 0.4)) : null,
+        borderRadius: BorderRadius.circular(24),
+        border: gradient == null
+            ? Border.all(
+                color: isDark
+                    ? c.border.withValues(alpha: 0.8)
+                    : c.border.withValues(alpha: 0.6),
+                width: 1,
+              )
+            : null,
         boxShadow: [
           BoxShadow(
-            color: c.accent.withValues(alpha: 0.04),
+            color: gradient == null
+                ? (isDark
+                      ? Colors.black.withValues(alpha: 0.25)
+                      : c.ink.withValues(alpha: 0.035))
+                : c.accent.withValues(alpha: 0.18),
             blurRadius: 24,
             offset: const Offset(0, 8),
           ),
@@ -47,38 +59,54 @@ class SectionCard extends StatelessWidget {
         children: [
           if (title != null)
             Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 if (icon != null) ...[
                   Container(
-                    width: 34,
-                    height: 34,
+                    width: 36,
+                    height: 36,
                     decoration: BoxDecoration(
-                      color: gradient != null ? Colors.white.withValues(alpha: 0.18) : (iconColor ?? c.accent).withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(10),
+                      color: gradient != null
+                          ? Colors.white.withValues(alpha: 0.2)
+                          : (iconColor ?? c.accent).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Icon(icon, size: 17, color: gradient != null ? Colors.white : (iconColor ?? c.accent)),
+                    child: Icon(
+                      icon,
+                      size: 18,
+                      color: gradient != null
+                          ? Colors.white
+                          : (iconColor ?? c.accent),
+                    ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 12),
                 ],
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title!,
-                          style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -0.2,
-                              color: gradient != null ? Colors.white : c.ink)),
+                      Text(
+                        title!,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.3,
+                          color: gradient != null ? Colors.white : c.ink,
+                        ),
+                      ),
                       if (caption != null)
                         Padding(
-                          padding: const EdgeInsets.only(top: 3),
-                          child: Text(caption!,
-                              style: TextStyle(
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.w500,
-                                  color: gradient != null ? Colors.white.withValues(alpha: 0.8) : c.ink3)),
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            caption!,
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w500,
+                              color: gradient != null
+                                  ? Colors.white.withValues(alpha: 0.85)
+                                  : c.ink3,
+                            ),
+                          ),
                         ),
                     ],
                   ),
@@ -86,7 +114,7 @@ class SectionCard extends StatelessWidget {
                 ?trailing,
               ],
             ),
-          if (title != null) const SizedBox(height: 14),
+          if (title != null) const SizedBox(height: 16),
           child,
         ],
       ),
@@ -99,19 +127,42 @@ class Pill extends StatelessWidget {
   final Color fg;
   final Color bg;
   final Color? border;
-  const Pill(this.text, {super.key, required this.fg, required this.bg, this.border});
+  final IconData? icon;
+  const Pill(
+    this.text, {
+    super.key,
+    required this.fg,
+    required this.bg,
+    this.border,
+    this.icon,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(20),
-        border: border != null ? Border.all(color: border!) : null,
+        border: border != null ? Border.all(color: border!, width: 1) : null,
       ),
-      child: Text(text,
-          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: fg)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 12, color: fg),
+            const SizedBox(width: 4),
+          ],
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w800,
+              color: fg,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -130,18 +181,27 @@ class LegendDot extends StatelessWidget {
           width: 10,
           height: 10,
           decoration: BoxDecoration(
-              color: color, borderRadius: BorderRadius.circular(4)),
+            color: color,
+            borderRadius: BorderRadius.circular(4),
+          ),
         ),
         const SizedBox(width: 6),
-        Text(label,
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: context.c.ink2)),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: context.c.ink2,
+          ),
+        ),
       ],
     );
   }
 }
 
 /// Bottom sheet แบบพรีเมียม — มี drag handle, title, animation
-Future<T?> showAppBottomSheet<T>(BuildContext context, {
+Future<T?> showAppBottomSheet<T>(
+  BuildContext context, {
   required String title,
   String? subtitle,
   required Widget child,
@@ -151,11 +211,8 @@ Future<T?> showAppBottomSheet<T>(BuildContext context, {
     context: context,
     isScrollControlled: isScrollControlled,
     backgroundColor: Colors.transparent,
-    builder: (_) => _AppBottomSheetShell(
-      title: title,
-      subtitle: subtitle,
-      child: child,
-    ),
+    builder: (_) =>
+        _AppBottomSheetShell(title: title, subtitle: subtitle, child: child),
   );
 }
 
@@ -163,7 +220,11 @@ class _AppBottomSheetShell extends StatelessWidget {
   final String title;
   final String? subtitle;
   final Widget child;
-  const _AppBottomSheetShell({required this.title, this.subtitle, required this.child});
+  const _AppBottomSheetShell({
+    required this.title,
+    this.subtitle,
+    required this.child,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -204,17 +265,22 @@ class _AppBottomSheetShell extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(title,
-                              style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: -0.3,
-                                  color: c.ink)),
+                          Text(
+                            title,
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.3,
+                              color: c.ink,
+                            ),
+                          ),
                           if (subtitle != null)
                             Padding(
                               padding: const EdgeInsets.only(top: 2),
-                              child: Text(subtitle!,
-                                  style: TextStyle(fontSize: 13, color: c.ink3)),
+                              child: Text(
+                                subtitle!,
+                                style: TextStyle(fontSize: 13, color: c.ink3),
+                              ),
                             ),
                         ],
                       ),
@@ -228,7 +294,11 @@ class _AppBottomSheetShell extends StatelessWidget {
                           color: c.surface2,
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: Icon(Icons.close_rounded, size: 18, color: c.ink3),
+                        child: Icon(
+                          Icons.close_rounded,
+                          size: 18,
+                          color: c.ink3,
+                        ),
                       ),
                     ),
                   ],
@@ -239,7 +309,10 @@ class _AppBottomSheetShell extends StatelessWidget {
               Flexible(
                 child: SingleChildScrollView(
                   padding: EdgeInsets.fromLTRB(
-                    24, 0, 24, MediaQuery.of(context).viewInsets.bottom + 24,
+                    24,
+                    0,
+                    24,
+                    MediaQuery.of(context).viewInsets.bottom + 24,
                   ),
                   child: child,
                 ),
@@ -253,7 +326,8 @@ class _AppBottomSheetShell extends StatelessWidget {
 }
 
 /// Dialog แบบพรีเมียม — ใช้แทน AlertDialog ธรรมดา
-Future<T?> showAppDialog<T>(BuildContext context, {
+Future<T?> showAppDialog<T>(
+  BuildContext context, {
   required String title,
   String? subtitle,
   required Widget content,
@@ -273,16 +347,22 @@ Future<T?> showAppDialog<T>(BuildContext context, {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title,
-                  style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.3,
-                      color: c.ink)),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.3,
+                  color: c.ink,
+                ),
+              ),
               if (subtitle != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
-                  child: Text(subtitle, style: TextStyle(fontSize: 13, color: c.ink3)),
+                  child: Text(
+                    subtitle,
+                    style: TextStyle(fontSize: 13, color: c.ink3),
+                  ),
                 ),
               const SizedBox(height: 20),
               content,
@@ -343,7 +423,10 @@ class AppModalField extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(color: c.accent, width: 2),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
       ),
     );
   }
@@ -369,13 +452,33 @@ class AppModalButton extends StatelessWidget {
     if (!isPrimary) {
       return TextButton(
         onPressed: onPressed,
-        child: Text(label, style: TextStyle(color: c.ink3, fontWeight: FontWeight.w600)),
+        style: TextButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: c.ink3,
+            fontWeight: FontWeight.w700,
+            fontSize: 14.5,
+          ),
+        ),
       );
     }
     return Container(
       decoration: BoxDecoration(
         gradient: isDestructive ? c.dangerGradient : c.accentGradient,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: (isDestructive ? c.coral : c.accent).withValues(alpha: 0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: ElevatedButton(
         onPressed: onPressed,
@@ -383,16 +486,24 @@ class AppModalButton extends StatelessWidget {
           backgroundColor: Colors.transparent,
           shadowColor: Colors.transparent,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
         ),
-        child: Text(label,
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
+        child: Text(
+          label,
+          style: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w800,
+            color: Colors.white,
+          ),
+        ),
       ),
     );
   }
 }
 
-/// ไอคอน带队列 style สำหรับใช้ใน modal
+/// ไอคอนสไตล์โมเดิร์นสำหรับใช้ใน modal
 class AppModalIcon extends StatelessWidget {
   final IconData icon;
   final Color color;
@@ -401,13 +512,13 @@ class AppModalIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 40,
-      height: 40,
+      width: 42,
+      height: 42,
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(12),
+        color: color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(14),
       ),
-      child: Icon(icon, color: color, size: 20),
+      child: Icon(icon, color: color, size: 22),
     );
   }
 }
@@ -424,12 +535,15 @@ class AppModalSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title,
-            style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: c.ink3,
-                letterSpacing: 0.3)),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: c.ink3,
+            letterSpacing: 0.3,
+          ),
+        ),
         const SizedBox(height: 8),
         child,
       ],
@@ -440,25 +554,48 @@ class AppModalSection extends StatelessWidget {
 class PageHeader extends StatelessWidget {
   final String title;
   final String subtitle;
-  const PageHeader({super.key, required this.title, required this.subtitle});
+  final Widget? trailing;
+  const PageHeader({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    this.trailing,
+  });
 
   @override
   Widget build(BuildContext context) {
     final c = context.c;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Text(title,
-              style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: -0.7,
-                  color: c.ink)),
-          const SizedBox(height: 4),
-          Text(subtitle,
-              style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: c.ink3)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.7,
+                    color: c.ink,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w500,
+                    color: c.ink3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          ?trailing,
         ],
       ),
     );
@@ -484,7 +621,8 @@ class SkeletonCard extends StatefulWidget {
   State<SkeletonCard> createState() => _SkeletonCardState();
 }
 
-class _SkeletonCardState extends State<SkeletonCard> with SingleTickerProviderStateMixin {
+class _SkeletonCardState extends State<SkeletonCard>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _animation;
 
@@ -495,9 +633,10 @@ class _SkeletonCardState extends State<SkeletonCard> with SingleTickerProviderSt
       vsync: this,
       duration: const Duration(milliseconds: 1200),
     )..repeat(reverse: true);
-    _animation = Tween<double>(begin: 0.35, end: 0.75).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _animation = Tween<double>(
+      begin: 0.35,
+      end: 0.75,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
   }
 
   @override
@@ -573,11 +712,7 @@ class ServerConnectingWidget extends StatelessWidget {
                     strokeWidth: 3.5,
                   ),
                 ),
-                Icon(
-                  Icons.cloud_sync_rounded,
-                  color: c.accent,
-                  size: 24,
-                ),
+                Icon(Icons.cloud_sync_rounded, color: c.accent, size: 24),
               ],
             ),
             const SizedBox(height: 20),
@@ -666,5 +801,3 @@ class ResponsiveContainer extends StatelessWidget {
     );
   }
 }
-
-

@@ -22,6 +22,8 @@ class AppColors extends ThemeExtension<AppColors> {
   final Gradient heroGradient;
   final Gradient dangerGradient;
   final Gradient purpleGradient;
+  final Gradient emeraldGradient;
+  final Gradient walletGradient;
 
   const AppColors({
     required this.bg,
@@ -44,32 +46,34 @@ class AppColors extends ThemeExtension<AppColors> {
     required this.heroGradient,
     required this.dangerGradient,
     required this.purpleGradient,
+    required this.emeraldGradient,
+    required this.walletGradient,
   });
 
   static const light = AppColors(
-    bg: Color(0xFFF0F4F8),
+    bg: Color(0xFFF4F7FB),
     surface: Color(0xFFFFFFFF),
-    surface2: Color(0xFFF5F8FA),
-    border: Color(0xFFE1E8EF),
-    ink: Color(0xFF0F1729),
-    ink2: Color(0xFF475569),
-    ink3: Color(0xFF94A3B8),
-    accent: Color(0xFF0EA5E9),
-    accentSoft: Color(0xFFE0F2FE),
+    surface2: Color(0xFFF1F5F9),
+    border: Color(0xFFE2E8F0),
+    ink: Color(0xFF0F172A),
+    ink2: Color(0xFF334155),
+    ink3: Color(0xFF64748B),
+    accent: Color(0xFF6366F1),
+    accentSoft: Color(0xFFEEF2FF),
     coral: Color(0xFFF43F5E),
-    coralSoft: Color(0xFFFEE2E9),
+    coralSoft: Color(0xFFFFF1F2),
     amber: Color(0xFFF59E0B),
     amberSoft: Color(0xFFFEF3C7),
     violet: Color(0xFF8B5CF6),
     blue: Color(0xFF3B82F6),
     good: Color(0xFF10B981),
     accentGradient: LinearGradient(
-      colors: [Color(0xFF0EA5E9), Color(0xFF06B6D4)],
+      colors: [Color(0xFF6366F1), Color(0xFF4F46E5)],
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
     ),
     heroGradient: LinearGradient(
-      colors: [Color(0xFF0EA5E9), Color(0xFF8B5CF6)],
+      colors: [Color(0xFF4F46E5), Color(0xFF7C3AED), Color(0xFF2563EB)],
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
     ),
@@ -83,42 +87,62 @@ class AppColors extends ThemeExtension<AppColors> {
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
     ),
+    emeraldGradient: LinearGradient(
+      colors: [Color(0xFF10B981), Color(0xFF059669)],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    ),
+    walletGradient: LinearGradient(
+      colors: [Color(0xFF1E1B4B), Color(0xFF312E81), Color(0xFF4338CA)],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    ),
   );
 
   static const dark = AppColors(
-    bg: Color(0xFF0B1120),
-    surface: Color(0xFF111827),
+    bg: Color(0xFF080C16),
+    surface: Color(0xFF0F172A),
     surface2: Color(0xFF1E293B),
     border: Color(0xFF1E293B),
-    ink: Color(0xFFF1F5F9),
+    ink: Color(0xFFF8FAFC),
     ink2: Color(0xFF94A3B8),
     ink3: Color(0xFF64748B),
-    accent: Color(0xFF38BDF8),
-    accentSoft: Color(0xFF0C2D48),
+    accent: Color(0xFF818CF8),
+    accentSoft: Color(0xFF1E1B4B),
     coral: Color(0xFFFB7185),
-    coralSoft: Color(0xFF3B1523),
+    coralSoft: Color(0xFF37121E),
     amber: Color(0xFFFBBF24),
     amberSoft: Color(0xFF3B2F10),
     violet: Color(0xFFA78BFA),
     blue: Color(0xFF60A5FA),
     good: Color(0xFF34D399),
     accentGradient: LinearGradient(
-      colors: [Color(0xFF38BDF8), Color(0xFF22D3EE)],
+      colors: [Color(0xFF818CF8), Color(0xFF6366F1)],
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
     ),
     heroGradient: LinearGradient(
-      colors: [Color(0xFF38BDF8), Color(0xFFA78BFA)],
+      colors: [Color(0xFF6366F1), Color(0xFF8B5CF6), Color(0xFF38BDF8)],
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
     ),
     dangerGradient: LinearGradient(
-      colors: [Color(0xFFFB7185), Color(0xFFFB923C)],
+      colors: [Color(0xFFFB7185), Color(0xFFF43F5E)],
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
     ),
     purpleGradient: LinearGradient(
       colors: [Color(0xFFA78BFA), Color(0xFF818CF8)],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    ),
+    emeraldGradient: LinearGradient(
+      colors: [Color(0xFF34D399), Color(0xFF10B981)],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    ),
+    walletGradient: LinearGradient(
+      colors: [Color(0xFF0F172A), Color(0xFF1E1B4B), Color(0xFF312E81)],
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
     ),
@@ -146,6 +170,8 @@ class AppColors extends ThemeExtension<AppColors> {
     Gradient? heroGradient,
     Gradient? dangerGradient,
     Gradient? purpleGradient,
+    Gradient? emeraldGradient,
+    Gradient? walletGradient,
   }) {
     return AppColors(
       bg: bg ?? this.bg,
@@ -168,6 +194,8 @@ class AppColors extends ThemeExtension<AppColors> {
       heroGradient: heroGradient ?? this.heroGradient,
       dangerGradient: dangerGradient ?? this.dangerGradient,
       purpleGradient: purpleGradient ?? this.purpleGradient,
+      emeraldGradient: emeraldGradient ?? this.emeraldGradient,
+      walletGradient: walletGradient ?? this.walletGradient,
     );
   }
 
@@ -195,6 +223,12 @@ class AppColors extends ThemeExtension<AppColors> {
       heroGradient: Gradient.lerp(heroGradient, other.heroGradient, t)!,
       dangerGradient: Gradient.lerp(dangerGradient, other.dangerGradient, t)!,
       purpleGradient: Gradient.lerp(purpleGradient, other.purpleGradient, t)!,
+      emeraldGradient: Gradient.lerp(
+        emeraldGradient,
+        other.emeraldGradient,
+        t,
+      )!,
+      walletGradient: Gradient.lerp(walletGradient, other.walletGradient, t)!,
     );
   }
 }
@@ -218,11 +252,7 @@ class AppTheme {
     final scheme = ColorScheme.fromSeed(
       seedColor: c.accent,
       brightness: brightness,
-    ).copyWith(
-      surface: c.surface,
-      primary: c.accent,
-      error: c.coral,
-    );
+    ).copyWith(surface: c.surface, primary: c.accent, error: c.coral);
 
     return ThemeData(
       useMaterial3: true,
@@ -232,13 +262,13 @@ class AppTheme {
       extensions: [c],
       splashFactory: InkSparkle.splashFactory,
       appBarTheme: AppBarTheme(
-        backgroundColor: c.surface,
+        backgroundColor: Colors.transparent,
         elevation: 0,
-        scrolledUnderElevation: 0.5,
+        scrolledUnderElevation: 0,
         centerTitle: false,
         titleTextStyle: TextStyle(
           fontSize: 22,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w900,
           color: c.ink,
           letterSpacing: -0.5,
         ),
@@ -253,82 +283,83 @@ class AppTheme {
           final selected = states.contains(WidgetState.selected);
           return TextStyle(
             fontSize: 11,
-            fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
+            fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
             color: selected ? c.accent : c.ink3,
           );
         }),
         iconTheme: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
-          return IconThemeData(
-            color: selected ? c.accent : c.ink3,
-            size: 24,
-          );
+          return IconThemeData(color: selected ? c.accent : c.ink3, size: 24);
         }),
       ),
       cardTheme: CardThemeData(
         color: c.surface,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: BorderSide(color: c.border.withValues(alpha: 0.5)),
+          borderRadius: BorderRadius.circular(24),
+          side: BorderSide(color: c.border.withValues(alpha: 0.6)),
         ),
         margin: EdgeInsets.zero,
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
         backgroundColor: c.accent,
         foregroundColor: Colors.white,
-        elevation: 4,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        elevation: 6,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: c.surface2,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: c.border),
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: c.border.withValues(alpha: 0.7)),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: c.border),
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: c.border.withValues(alpha: 0.7)),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide(color: c.accent, width: 2),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 18,
+          vertical: 16,
+        ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: c.accent,
           foregroundColor: Colors.white,
           elevation: 0,
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 15),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(16),
           ),
-          textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+          textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 15),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(16),
           ),
           side: BorderSide(color: c.border),
         ),
       ),
       dividerTheme: DividerThemeData(
-        color: c.border,
+        color: c.border.withValues(alpha: 0.6),
         thickness: 1,
         space: 1,
       ),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: c.ink,
-        contentTextStyle: TextStyle(color: c.surface, fontWeight: FontWeight.w600),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        contentTextStyle: TextStyle(
+          color: c.surface,
+          fontWeight: FontWeight.w700,
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         behavior: SnackBarBehavior.floating,
       ),
     );

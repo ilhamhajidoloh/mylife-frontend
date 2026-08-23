@@ -329,6 +329,7 @@ class _TasksPageState extends State<TasksPage> {
   @override
   Widget build(BuildContext context) {
     final c = context.c;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       floatingActionButton: Container(
@@ -358,51 +359,56 @@ class _TasksPageState extends State<TasksPage> {
             ),
             const SizedBox(height: 16),
 
-            // Filter Section
+            // Modern Segmented Filter Bar
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
                 color: c.surface,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: c.border),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('สถานะ', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: c.ink3)),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      _buildFilterChip('ทั้งหมด', _statusFilter == 'all', () {
-                        setState(() => _statusFilter = 'all');
-                      }),
-                      const SizedBox(width: 8),
-                      _buildFilterChip('ค้างส่ง', _statusFilter == 'pending', () {
-                        setState(() => _statusFilter = 'pending');
-                      }),
-                      const SizedBox(width: 8),
-                      _buildFilterChip('เสร็จแล้ว', _statusFilter == 'completed', () {
-                        setState(() => _statusFilter = 'completed');
-                      }),
-                    ],
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isDark ? c.border.withValues(alpha: 0.8) : c.border.withValues(alpha: 0.6),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: isDark ? Colors.black.withValues(alpha: 0.2) : c.ink.withValues(alpha: 0.03),
+                    blurRadius: 14,
+                    offset: const Offset(0, 4),
                   ),
-                  const SizedBox(height: 12),
-                  Text('ความสำคัญ', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: c.ink3)),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      _buildFilterChip('ทั้งหมด', _priorityFilter == 'all', () {
-                        setState(() => _priorityFilter = 'all');
-                      }),
-                      const SizedBox(width: 8),
-                      _buildFilterChip('🔥 ด่วน', _priorityFilter == 'urgent', () {
-                        setState(() => _priorityFilter = 'urgent');
-                      }, isUrgent: true),
-                      const SizedBox(width: 8),
-                      _buildFilterChip('ปกติ', _priorityFilter == 'normal', () {
-                        setState(() => _priorityFilter = 'normal');
-                      }),
-                    ],
+                ],
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _buildSegmentFilter('ทั้งหมด', _statusFilter == 'all' && _priorityFilter == 'all', () {
+                      setState(() {
+                        _statusFilter = 'all';
+                        _priorityFilter = 'all';
+                      });
+                    }),
+                  ),
+                  Expanded(
+                    child: _buildSegmentFilter('ค้างส่ง', _statusFilter == 'pending' && _priorityFilter != 'urgent', () {
+                      setState(() {
+                        _statusFilter = 'pending';
+                        _priorityFilter = 'all';
+                      });
+                    }),
+                  ),
+                  Expanded(
+                    child: _buildSegmentFilter('🔥 ด่วน', _priorityFilter == 'urgent', () {
+                      setState(() {
+                        _priorityFilter = 'urgent';
+                        _statusFilter = 'all';
+                      });
+                    }, isUrgent: true),
+                  ),
+                  Expanded(
+                    child: _buildSegmentFilter('เสร็จแล้ว', _statusFilter == 'completed', () {
+                      setState(() {
+                        _statusFilter = 'completed';
+                        _priorityFilter = 'all';
+                      });
+                    }),
                   ),
                 ],
               ),
@@ -580,27 +586,29 @@ class _TasksPageState extends State<TasksPage> {
     );
   }
 
-  Widget _buildFilterChip(String label, bool isSelected, VoidCallback onTap, {bool isUrgent = false}) {
+  Widget _buildSegmentFilter(String label, bool isSelected, VoidCallback onTap, {bool isUrgent = false}) {
     final c = context.c;
 
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? c.accent : c.surface2,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isSelected ? c.accent : c.border,
-            width: isSelected ? 2 : 1,
-          ),
+          color: isSelected ? (isUrgent ? c.coralSoft : c.accentSoft) : Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+          border: isSelected
+              ? Border.all(color: (isUrgent ? c.coral : c.accent).withValues(alpha: 0.3))
+              : null,
         ),
         child: Text(
           label,
+          textAlign: TextAlign.center,
           style: TextStyle(
-            fontSize: 12,
-            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-            color: isSelected ? Colors.white : (isUrgent ? c.coral : c.ink2),
+            fontSize: 12.5,
+            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+            color: isSelected ? (isUrgent ? c.coral : c.accent) : c.ink3,
           ),
         ),
       ),

@@ -453,6 +453,7 @@ class _TodolistPageState extends State<TodolistPage> {
   @override
   Widget build(BuildContext context) {
     final c = context.c;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       floatingActionButton: Container(
@@ -506,56 +507,94 @@ class _TodolistPageState extends State<TodolistPage> {
               const SizedBox(height: 16),
               const SkeletonCard(height: 120, borderRadius: 20),
             ] else ...[
-              // Progress Ring Card
+              // 1. Hero Focus Bento Card
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: c.surface,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: c.accent.withValues(alpha: 0.2)),
+                  gradient: c.heroGradient,
+                  borderRadius: BorderRadius.circular(26),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.18),
+                    width: 1.2,
+                  ),
                   boxShadow: [
                     BoxShadow(
-                      color: c.accent.withValues(alpha: 0.08),
-                      blurRadius: 20,
-                      offset: const Offset(0, 6),
+                      color: c.accent.withValues(alpha: 0.32),
+                      blurRadius: 24,
+                      offset: const Offset(0, 8),
                     ),
                   ],
                 ),
                 child: Row(
                   children: [
-                    ProgressRing(
-                      progress: _completionPercentage,
-                      centerTop:
-                          '${(_completionPercentage * 100).toStringAsFixed(0)}%',
-                      centerBottom: 'สำเร็จ',
-                      color: c.accent,
-                      size: 84,
+                    Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: ProgressRing(
+                        progress: _completionPercentage,
+                        centerTop:
+                            '${(_completionPercentage * 100).toStringAsFixed(0)}%',
+                        centerBottom: 'สำเร็จ',
+                        color: Colors.white,
+                        size: 80,
+                      ),
                     ),
-                    const SizedBox(width: 20),
+                    const SizedBox(width: 18),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'ความสำเร็จวันนี้',
-                            style: TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w800,
-                              color: c.ink,
-                            ),
+                          Row(
+                            children: [
+                              Container(
+                                width: 7,
+                                height: 7,
+                                decoration: const BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Color(0xFF4ADE80),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'TODAY FOCUS',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.8,
+                                  color: Colors.white.withValues(alpha: 0.9),
+                                ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            '$_completedCount / $_totalCount รายการ',
-                            style: TextStyle(fontSize: 14, color: c.ink3),
+                            'เป้าหมายวันนี้',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                              letterSpacing: -0.4,
+                            ),
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 2),
+                          Text(
+                            '$_completedCount จาก $_totalCount งานสำเร็จแล้ว',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.white.withValues(alpha: 0.85),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
                           ClipRRect(
-                            borderRadius: BorderRadius.circular(20),
+                            borderRadius: BorderRadius.circular(10),
                             child: LinearProgressIndicator(
                               value: _completionPercentage.clamp(0.0, 1.0),
-                              backgroundColor: c.surface2,
-                              valueColor: AlwaysStoppedAnimation(c.accent),
+                              backgroundColor: Colors.white.withValues(alpha: 0.2),
+                              valueColor: const AlwaysStoppedAnimation(Color(0xFF4ADE80)),
                               minHeight: 6,
                             ),
                           ),
@@ -567,100 +606,98 @@ class _TodolistPageState extends State<TodolistPage> {
               ),
               const SizedBox(height: 16),
 
-              // View mode
+              // 2. View Mode Switcher & Range Navigator
               Container(
-                padding: const EdgeInsets.all(4),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
                 decoration: BoxDecoration(
-                  color: c.surface2,
-                  borderRadius: BorderRadius.circular(14),
+                  color: c.surface,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: isDark ? c.border.withValues(alpha: 0.8) : c.border.withValues(alpha: 0.6),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: isDark ? Colors.black.withValues(alpha: 0.2) : c.ink.withValues(alpha: 0.03),
+                      blurRadius: 14,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
-                child: Row(
-                  children: ['ทั้งหมด', 'วัน', 'เดือน', 'ปี'].map((v) {
-                    final isSel = _selectedView == v;
-                    return Expanded(
-                      child: GestureDetector(
-                        onTap: () => _changeView(v),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          decoration: BoxDecoration(
-                            color: isSel ? c.surface : Colors.transparent,
-                            borderRadius: BorderRadius.circular(10),
-                            boxShadow: isSel
-                                ? [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(
-                                        alpha: 0.06,
-                                      ),
-                                      blurRadius: 8,
-                                    ),
-                                  ]
-                                : [],
-                          ),
-                          child: Text(
-                            v,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: isSel
-                                  ? FontWeight.w800
-                                  : FontWeight.w500,
-                              color: isSel ? c.ink : c.ink3,
+                child: Column(
+                  children: [
+                    Row(
+                      children: ['ทั้งหมด', 'วัน', 'เดือน', 'ปี'].map((v) {
+                        final isSel = _selectedView == v;
+                        return Expanded(
+                          child: GestureDetector(
+                            onTap: () => _changeView(v),
+                            behavior: HitTestBehavior.opaque,
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              decoration: BoxDecoration(
+                                color: isSel ? c.accentSoft : Colors.transparent,
+                                borderRadius: BorderRadius.circular(12),
+                                border: isSel
+                                    ? Border.all(color: c.accent.withValues(alpha: 0.25))
+                                    : null,
+                              ),
+                              child: Text(
+                                v,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: isSel ? FontWeight.w800 : FontWeight.w600,
+                                  color: isSel ? c.accent : c.ink3,
+                                ),
+                              ),
                             ),
                           ),
-                        ),
+                        );
+                      }).toList(),
+                    ),
+                    if (_selectedView != 'ทั้งหมด') ...[
+                      const Divider(height: 12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          GestureDetector(
+                            onTap: () => _shiftView(-1),
+                            child: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: c.surface2,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(Icons.chevron_left_rounded, color: c.ink2, size: 18),
+                            ),
+                          ),
+                          Text(
+                            _rangeLabel,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              color: c.ink,
+                              fontSize: 13,
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () => _shiftView(1),
+                            child: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: c.surface2,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(Icons.chevron_right_rounded, color: c.ink2, size: 18),
+                            ),
+                          ),
+                        ],
                       ),
-                    );
-                  }).toList(),
+                    ],
+                  ],
                 ),
               ),
-              const SizedBox(height: 10),
-
-              // Range navigator
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  GestureDetector(
-                    onTap: () => _shiftView(-1),
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: c.surface2,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(
-                        Icons.chevron_left_rounded,
-                        color: c.ink3,
-                        size: 20,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    _rangeLabel,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      color: c.ink,
-                      fontSize: 13.5,
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: () => _shiftView(1),
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: c.surface2,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(
-                        Icons.chevron_right_rounded,
-                        color: c.ink3,
-                        size: 20,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
 
               // Tag chips
               SingleChildScrollView(

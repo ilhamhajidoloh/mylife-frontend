@@ -4,11 +4,9 @@ import 'dart:async';
 import 'theme/app_theme.dart';
 import 'widgets/common.dart';
 import 'pages/overview_page.dart';
+import 'pages/planner_page.dart';
 import 'pages/finance_page.dart';
-import 'pages/schedule_page.dart';
-import 'pages/activity_page.dart';
 import 'pages/todolist_page.dart';
-import 'pages/tasks_page.dart';
 import 'pages/auth_page.dart';
 import 'pages/onboarding_page.dart';
 import 'pages/profile_page.dart';
@@ -20,10 +18,12 @@ import 'services/data_event_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.dark,
-  ));
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+    ),
+  );
   await NotificationService.init();
   runApp(const MyLifeApp());
 }
@@ -85,12 +85,9 @@ class _MyLifeAppState extends State<MyLifeApp> {
         theme: AppTheme.light,
         darkTheme: AppTheme.dark,
         themeMode: _themeMode,
-        builder: (context, child) => ResponsiveContainer(child: child ?? const SizedBox()),
-        home: const Scaffold(
-          body: Center(
-            child: CircularProgressIndicator(),
-          ),
-        ),
+        builder: (context, child) =>
+            ResponsiveContainer(child: child ?? const SizedBox()),
+        home: const Scaffold(body: Center(child: CircularProgressIndicator())),
       );
     }
 
@@ -100,10 +97,17 @@ class _MyLifeAppState extends State<MyLifeApp> {
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
       themeMode: _themeMode,
-      builder: (context, child) => ResponsiveContainer(child: child ?? const SizedBox()),
+      builder: (context, child) =>
+          ResponsiveContainer(child: child ?? const SizedBox()),
       home: _isFirstRun
-          ? OnboardingPage(onToggleTheme: _setThemeMode, currentThemeMode: _themeMode)
-          : HomeShell(onToggleTheme: _setThemeMode, currentThemeMode: _themeMode),
+          ? OnboardingPage(
+              onToggleTheme: _setThemeMode,
+              currentThemeMode: _themeMode,
+            )
+          : HomeShell(
+              onToggleTheme: _setThemeMode,
+              currentThemeMode: _themeMode,
+            ),
     );
   }
 }
@@ -111,7 +115,11 @@ class _MyLifeAppState extends State<MyLifeApp> {
 class HomeShell extends StatefulWidget {
   final void Function(ThemeMode) onToggleTheme;
   final ThemeMode currentThemeMode;
-  const HomeShell({super.key, required this.onToggleTheme, required this.currentThemeMode});
+  const HomeShell({
+    super.key,
+    required this.onToggleTheme,
+    required this.currentThemeMode,
+  });
 
   @override
   State<HomeShell> createState() => _HomeShellState();
@@ -127,29 +135,23 @@ class _HomeShellState extends State<HomeShell> {
 
   static const _pages = <Widget>[
     OverviewPage(),
+    PlannerPage(),
     FinancePage(),
-    SchedulePage(),
     TodolistPage(),
-    ActivityPage(),
-    TasksPage(),
   ];
 
   static const _icons = <IconData>[
-    Icons.dashboard_rounded,
-    Icons.account_balance_wallet_rounded,
+    Icons.grid_view_rounded,
     Icons.calendar_month_rounded,
-    Icons.check_circle_rounded,
-    Icons.celebration_rounded,
-    Icons.assignment_rounded,
+    Icons.account_balance_wallet_rounded,
+    Icons.checklist_rounded,
   ];
 
   static const _iconsOut = <IconData>[
-    Icons.dashboard_outlined,
-    Icons.account_balance_wallet_outlined,
+    Icons.grid_view_outlined,
     Icons.calendar_month_outlined,
-    Icons.check_circle_outline,
-    Icons.celebration_outlined,
-    Icons.assignment_outlined,
+    Icons.account_balance_wallet_outlined,
+    Icons.checklist_outlined,
   ];
 
   @override
@@ -157,7 +159,9 @@ class _HomeShellState extends State<HomeShell> {
     super.initState();
     _isOnline = ConnectivityService.isOnline;
     ApiClient.setOffline(!_isOnline);
-    _connectivitySubscription = ConnectivityService.isOnlineStream.listen((isOnline) {
+    _connectivitySubscription = ConnectivityService.isOnlineStream.listen((
+      isOnline,
+    ) {
       if (mounted) {
         setState(() {
           _isOnline = isOnline;
@@ -166,7 +170,10 @@ class _HomeShellState extends State<HomeShell> {
         if (isOnline) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('กลับมาออนไลน์แล้ว — ดึงหน้าจอเพื่ออัพเดทข้อมูล', style: TextStyle(fontWeight: FontWeight.w600)),
+              content: Text(
+                'กลับมาออนไลน์แล้ว — ดึงหน้าจอเพื่ออัพเดทข้อมูล',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
               backgroundColor: Color(0xFF4CAF50),
               duration: Duration(seconds: 2),
             ),
@@ -205,7 +212,10 @@ class _HomeShellState extends State<HomeShell> {
           onLogout: _checkInitialLogin,
         ),
         transitionsBuilder: (_, anim, _, child) => SlideTransition(
-          position: Tween(begin: const Offset(1, 0), end: Offset.zero).animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
+          position: Tween(
+            begin: const Offset(1, 0),
+            end: Offset.zero,
+          ).animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
           child: child,
         ),
       ),
@@ -221,7 +231,10 @@ class _HomeShellState extends State<HomeShell> {
     widget.onToggleTheme(modes[nextIdx]);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('สลับเป็น ${labels[nextIdx]} mode', style: const TextStyle(fontWeight: FontWeight.w700)),
+        content: Text(
+          'สลับเป็น ${labels[nextIdx]} mode',
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
         duration: const Duration(milliseconds: 800),
         behavior: SnackBarBehavior.floating,
       ),
@@ -268,15 +281,30 @@ class _HomeShellState extends State<HomeShell> {
                   gradient: c.heroGradient,
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: const Icon(Icons.auto_awesome, color: Colors.white, size: 32),
+                child: const Icon(
+                  Icons.auto_awesome,
+                  color: Colors.white,
+                  size: 32,
+                ),
               ),
               const SizedBox(height: 20),
-              Text('Mylife', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: c.ink, letterSpacing: -1)),
+              Text(
+                'Mylife',
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w900,
+                  color: c.ink,
+                  letterSpacing: -1,
+                ),
+              ),
               const SizedBox(height: 12),
               SizedBox(
                 width: 32,
                 height: 32,
-                child: CircularProgressIndicator(strokeWidth: 3, color: c.accent),
+                child: CircularProgressIndicator(
+                  strokeWidth: 3,
+                  color: c.accent,
+                ),
               ),
             ],
           ),
@@ -286,14 +314,13 @@ class _HomeShellState extends State<HomeShell> {
 
     if (!_isLoggedIn) {
       return Scaffold(
-        body: SafeArea(
-          child: AuthPage(onLoginSuccess: _checkInitialLogin),
-        ),
+        body: SafeArea(child: AuthPage(onLoginSuccess: _checkInitialLogin)),
       );
     }
 
-    final labels = ['ภาพรวม', 'การเงิน', 'ตารางเรียน', 'Todolist', 'กิจกรรม', 'งาน'];
+    final labels = ['วันนี้', 'แผนงาน', 'การเงิน', 'สิ่งที่ต้องทำ'];
     final small = context.isSmallScreen;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       body: Column(
@@ -302,52 +329,74 @@ class _HomeShellState extends State<HomeShell> {
           SafeArea(
             bottom: false,
             child: Container(
-              padding: EdgeInsets.fromLTRB(small ? 12 : 20, 8, small ? 6 : 12, 0),
+              padding: EdgeInsets.fromLTRB(
+                small ? 14 : 20,
+                10,
+                small ? 8 : 14,
+                8,
+              ),
               child: Row(
                 children: [
                   // Greeting area
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Row(
                       children: [
-                        Row(
-                          children: [
-                            Container(
-                              width: small ? 34 : 38,
-                              height: small ? 34 : 38,
-                              decoration: BoxDecoration(
-                                gradient: c.accentGradient,
-                                borderRadius: BorderRadius.circular(12),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: c.accent.withValues(alpha: 0.3),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 3),
-                                  ),
-                                ],
+                        Container(
+                          width: small ? 38 : 42,
+                          height: small ? 38 : 42,
+                          decoration: BoxDecoration(
+                            gradient: c.heroGradient,
+                            borderRadius: BorderRadius.circular(14),
+                            boxShadow: [
+                              BoxShadow(
+                                color: c.accent.withValues(alpha: 0.35),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
                               ),
-                              child: const Icon(Icons.auto_awesome, color: Colors.white, size: 20),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    _getGreeting(),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: c.ink3),
-                                  ),
-                                  Text(
-                                    _userName,
-                                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: c.ink, letterSpacing: -0.3),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ],
+                            ],
+                          ),
+                          child: Center(
+                            child: Text(
+                              _userName.isNotEmpty
+                                  ? _userName[0].toUpperCase()
+                                  : 'M',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.white,
                               ),
                             ),
-                          ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                _getGreeting(),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: c.ink3,
+                                ),
+                              ),
+                              const SizedBox(height: 1),
+                              Text(
+                                _userName,
+                                style: TextStyle(
+                                  fontSize: 16.5,
+                                  fontWeight: FontWeight.w900,
+                                  color: c.ink,
+                                  letterSpacing: -0.4,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -410,9 +459,13 @@ class _HomeShellState extends State<HomeShell> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.wifi_off_rounded, color: Colors.white, size: 18),
+                    const Icon(
+                      Icons.wifi_off_rounded,
+                      color: Colors.white,
+                      size: 18,
+                    ),
                     const SizedBox(width: 8),
-                    Text(
+                    const Text(
                       'ออฟไลน์ — ข้อมูลอาจไม่ใช่ล่าสุด',
                       style: TextStyle(
                         color: Colors.white,
@@ -427,61 +480,262 @@ class _HomeShellState extends State<HomeShell> {
         ],
       ),
       bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: c.surface,
-          border: Border(top: BorderSide(color: c.border.withValues(alpha: 0.5), width: 0.5)),
+        padding: EdgeInsets.fromLTRB(
+          14,
+          0,
+          14,
+          MediaQuery.of(context).padding.bottom > 0 ? 10 : 14,
         ),
-        child: SafeArea(
+        decoration: const BoxDecoration(color: Colors.transparent),
+        child: Container(
+          decoration: BoxDecoration(
+            color: isDark ? c.surface.withValues(alpha: 0.96) : c.surface,
+            borderRadius: BorderRadius.circular(26),
+            border: Border.all(
+              color: isDark
+                  ? c.border.withValues(alpha: 0.8)
+                  : c.border.withValues(alpha: 0.7),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: isDark
+                    ? Colors.black.withValues(alpha: 0.45)
+                    : c.ink.withValues(alpha: 0.08),
+                blurRadius: 28,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
             child: Row(
-              children: List.generate(_icons.length, (i) {
-                final isSelected = _index == i;
-                return Expanded(
+              children: [
+                // Tab 0: วันนี้
+                _buildNavItem(0, labels[0], _icons[0], _iconsOut[0], c, small),
+                // Tab 1: แผนงาน
+                _buildNavItem(1, labels[1], _icons[1], _iconsOut[1], c, small),
+
+                // Center Action Button (+)
+                Expanded(
                   child: GestureDetector(
-                    onTap: () {
-                      setState(() => _index = i);
-                      DataEventService.notifyDataChanged();
-                    },
+                    onTap: _showUniversalQuickAdd,
                     behavior: HitTestBehavior.opaque,
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 250),
-                      curve: Curves.easeOutCubic,
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      decoration: BoxDecoration(
-                        color: isSelected ? c.accentSoft : Colors.transparent,
-                        borderRadius: BorderRadius.circular(14),
-                      ),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(
-                            isSelected ? _icons[i] : _iconsOut[i],
-                            color: isSelected ? c.accent : c.ink3,
-                            size: small ? 21 : 24,
+                          Container(
+                            width: small ? 38 : 42,
+                            height: small ? 38 : 42,
+                            decoration: BoxDecoration(
+                              gradient: c.accentGradient,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: c.accent.withValues(alpha: 0.4),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.add_rounded,
+                              color: Colors.white,
+                              size: 24,
+                            ),
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            labels[i],
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                            'สร้างด่วน',
                             style: TextStyle(
-                              fontSize: small ? 9.5 : 10.5,
-                              fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
-                              color: isSelected ? c.accent : c.ink3,
+                              fontSize: small ? 9 : 10,
+                              fontWeight: FontWeight.w700,
+                              color: c.accent,
                             ),
                           ),
                         ],
                       ),
                     ),
                   ),
-                );
-              }),
+                ),
+
+                // Tab 2: การเงิน
+                _buildNavItem(2, labels[2], _icons[2], _iconsOut[2], c, small),
+                // Tab 3: สิ่งที่ต้องทำ
+                _buildNavItem(3, labels[3], _icons[3], _iconsOut[3], c, small),
+              ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavItem(
+    int index,
+    String label,
+    IconData iconSelected,
+    IconData iconUnselected,
+    AppColors c,
+    bool small,
+  ) {
+    final isSelected = _index == index;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          setState(() => _index = index);
+          DataEventService.notifyDataChanged();
+        },
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? c.accentSoft : Colors.transparent,
+            borderRadius: BorderRadius.circular(18),
+            border: isSelected
+                ? Border.all(color: c.accent.withValues(alpha: 0.2), width: 1)
+                : null,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                isSelected ? iconSelected : iconUnselected,
+                color: isSelected ? c.accent : c.ink3,
+                size: small ? 20 : 22,
+              ),
+              const SizedBox(height: 3),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: small ? 9.5 : 10.5,
+                  fontWeight: isSelected ? FontWeight.w900 : FontWeight.w600,
+                  color: isSelected ? c.accent : c.ink3,
+                ),
+              ),
+            ],
           ),
         ),
-      );
+      ),
+    );
+  }
+
+  void _showUniversalQuickAdd() {
+    final c = context.c;
+    showAppBottomSheet(
+      context,
+      title: 'สร้างรายการด่วน',
+      subtitle: 'เลือกประเภทรายการที่ต้องการเพิ่ม',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _quickActionOption(
+            icon: Icons.account_balance_wallet_rounded,
+            color: c.accent,
+            title: 'จดบันทึกรายรับ - รายจ่าย',
+            subtitle: 'บันทึกค่าใช้จ่ายหรือเงินเข้ากระเป๋า',
+            onTap: () {
+              Navigator.pop(context);
+              setState(() => _index = 2); // Switch to Finance
+            },
+          ),
+          const SizedBox(height: 10),
+          _quickActionOption(
+            icon: Icons.check_circle_outline_rounded,
+            color: c.good,
+            title: 'เพิ่มสิ่งที่ต้องทำ (Todolist)',
+            subtitle: 'จดรายการงานประจำวันและเป้าหมาย',
+            onTap: () {
+              Navigator.pop(context);
+              setState(() => _index = 3); // Switch to Todolist
+            },
+          ),
+          const SizedBox(height: 10),
+          _quickActionOption(
+            icon: Icons.celebration_rounded,
+            color: c.violet,
+            title: 'เพิ่มกิจกรรม / นัดหมายสำคัญ',
+            subtitle: 'สร้างกิจกรรมพร้อมระบบนับถอยหลัง',
+            onTap: () {
+              Navigator.pop(context);
+              setState(() => _index = 1); // Switch to Planner
+            },
+          ),
+          const SizedBox(height: 10),
+          _quickActionOption(
+            icon: Icons.calendar_month_rounded,
+            color: c.amber,
+            title: 'เพิ่มวิชาเรียนในตาราง',
+            subtitle: 'กำหนดวัน เวลา และห้องเรียน',
+            onTap: () {
+              Navigator.pop(context);
+              setState(() => _index = 1); // Switch to Planner
+            },
+          ),
+          const SizedBox(height: 12),
+        ],
+      ),
+    );
+  }
+
+  Widget _quickActionOption({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    final c = context.c;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: c.surface2,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: c.border.withValues(alpha: 0.6)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(icon, color: color, size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w700,
+                      color: c.ink,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(subtitle, style: TextStyle(fontSize: 12, color: c.ink3)),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: c.ink3, size: 20),
+          ],
+        ),
+      ),
+    );
   }
 
   String _getGreeting() {
@@ -499,21 +753,26 @@ class _HomeShellState extends State<HomeShell> {
     bool isSelected = false,
     bool small = false,
   }) {
-    final size = small ? 34.0 : 40.0;
+    final size = small ? 36.0 : 40.0;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         width: size,
         height: size,
-        margin: EdgeInsets.symmetric(horizontal: small ? 1.5 : 3),
+        margin: EdgeInsets.symmetric(horizontal: small ? 2 : 3.5),
         decoration: BoxDecoration(
           color: isSelected ? c.accentSoft : c.surface2,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected
+                ? c.accent.withValues(alpha: 0.3)
+                : c.border.withValues(alpha: 0.5),
+          ),
         ),
         child: Stack(
           alignment: Alignment.center,
           children: [
-            Icon(icon, color: c.ink2, size: small ? 19 : 22),
+            Icon(icon, color: c.ink2, size: small ? 19 : 21),
             if (badge != null)
               Positioned(
                 top: 4,
@@ -529,7 +788,11 @@ class _HomeShellState extends State<HomeShell> {
                   child: Center(
                     child: Text(
                       '$badge',
-                      style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w800, color: Colors.white),
+                      style: const TextStyle(
+                        fontSize: 8,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),
@@ -582,11 +845,31 @@ class _HomeShellState extends State<HomeShell> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('การแจ้งเตือนสด (Live Server Data)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: cc.ink)),
+                      Text(
+                        'การแจ้งเตือนสด (Live Server Data)',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: cc.ink,
+                        ),
+                      ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(color: cc.accentSoft, borderRadius: BorderRadius.circular(6)),
-                        child: Text('${notifications.length} รายการ', style: TextStyle(fontSize: 11, color: cc.accent, fontWeight: FontWeight.bold)),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: cc.accentSoft,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          '${notifications.length} รายการ',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: cc.accent,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -615,8 +898,21 @@ class _HomeShellState extends State<HomeShell> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(item.title, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: cc.ink)),
-                                Text(item.message, style: TextStyle(fontSize: 12, color: cc.ink3)),
+                                Text(
+                                  item.title,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14,
+                                    color: cc.ink,
+                                  ),
+                                ),
+                                Text(
+                                  item.message,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: cc.ink3,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -640,5 +936,3 @@ class _HomeShellState extends State<HomeShell> {
     }
   }
 }
-
-

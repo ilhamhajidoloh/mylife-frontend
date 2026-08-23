@@ -18,7 +18,8 @@ class SchedulePage extends StatefulWidget {
   State<SchedulePage> createState() => _SchedulePageState();
 }
 
-class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver {
+class _SchedulePageState extends State<SchedulePage>
+    with WidgetsBindingObserver {
   bool _isLoading = true;
   String _termName = 'ยังไม่ได้ตั้งค่าภาคเรียน';
   String? _termId;
@@ -114,8 +115,12 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
       final t = terms[i];
       final rawStart = t['startDate'] ?? t['StartDate'];
       final rawEnd = t['endDate'] ?? t['EndDate'];
-      DateTime? sDate = rawStart != null ? DateTime.tryParse(rawStart.toString()) : null;
-      DateTime? eDate = rawEnd != null ? DateTime.tryParse(rawEnd.toString()) : null;
+      DateTime? sDate = rawStart != null
+          ? DateTime.tryParse(rawStart.toString())
+          : null;
+      DateTime? eDate = rawEnd != null
+          ? DateTime.tryParse(rawEnd.toString())
+          : null;
 
       if (sDate != null && eDate != null) {
         final sOnly = DateTime(sDate.year, sDate.month, sDate.day);
@@ -132,7 +137,9 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
     for (int i = 0; i < terms.length; i++) {
       final t = terms[i];
       final rawStart = t['startDate'] ?? t['StartDate'];
-      DateTime? sDate = rawStart != null ? DateTime.tryParse(rawStart.toString()) : null;
+      DateTime? sDate = rawStart != null
+          ? DateTime.tryParse(rawStart.toString())
+          : null;
       if (sDate != null) {
         final sOnly = DateTime(sDate.year, sDate.month, sDate.day);
         final diff = (sOnly.difference(todayOnly).inDays).abs();
@@ -159,7 +166,9 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
     }
     final currentTerm = _academicTerms[_selectedTermIndex];
     _termId = (currentTerm['id'] ?? currentTerm['Id'])?.toString();
-    _termName = (currentTerm['termName'] ?? currentTerm['TermName'])?.toString() ?? 'ภาคเรียน';
+    _termName =
+        (currentTerm['termName'] ?? currentTerm['TermName'])?.toString() ??
+        'ภาคเรียน';
     final rawStart = currentTerm['startDate'] ?? currentTerm['StartDate'];
     final rawEnd = currentTerm['endDate'] ?? currentTerm['EndDate'];
     if (rawStart != null) {
@@ -172,9 +181,11 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
 
   /// ตั้งเวลาแจ้งเตือนสำหรับวิชาเรียนทั้งหมดที่โหลดมาใหม่
   Future<void> _rescheduleAllCourseNotifications() async {
-    if (_academicTerms.isEmpty || _selectedTermIndex >= _academicTerms.length) return;
+    if (_academicTerms.isEmpty || _selectedTermIndex >= _academicTerms.length)
+      return;
     try {
-      final courses = (_academicTerms[_selectedTermIndex]['courses'] as List?) ?? [];
+      final courses =
+          (_academicTerms[_selectedTermIndex]['courses'] as List?) ?? [];
       for (final course in courses) {
         final id = course['id'];
         final name = course['courseName'] ?? course['courseCode'] ?? '';
@@ -209,26 +220,40 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
 
         final dartDay = (rawDay == 0) ? 7 : rawDay;
 
-        if (id == null || name.toString().trim().isEmpty || startTimeStr.toString().trim().isEmpty) continue;
+        if (id == null ||
+            name.toString().trim().isEmpty ||
+            startTimeStr.toString().trim().isEmpty)
+          continue;
 
         final timeParts = startTimeStr.toString().split(':');
         final hour = int.tryParse(timeParts[0]) ?? 0;
-        final minute = timeParts.length > 1 ? (int.tryParse(timeParts[1]) ?? 0) : 0;
+        final minute = timeParts.length > 1
+            ? (int.tryParse(timeParts[1]) ?? 0)
+            : 0;
 
         final notifId = (id.toString().hashCode).abs() % 2147483647;
         await NotificationService.scheduleWeeklyCourseNotification(
           id: notifId,
           title: '🎓 เตรียมตัวเรียนวิชา $name',
-          body: 'จะเริ่มเรียนเวลา $startTimeStr น.${room.isNotEmpty ? " (ห้อง $room)" : ""}',
+          body:
+              'จะเริ่มเรียนเวลา $startTimeStr น.${room.isNotEmpty ? " (ห้อง $room)" : ""}',
           dayOfWeek: dartDay,
           hour: hour,
           minute: minute,
           advanceMinutes: 15,
         );
       }
-      Logger.info('SchedulePage', 'Rescheduled ${courses.length} course notifications');
+      Logger.info(
+        'SchedulePage',
+        'Rescheduled ${courses.length} course notifications',
+      );
     } catch (e, st) {
-      Logger.catchBlock('SchedulePage', 'rescheduleAllCourseNotifications', e, st);
+      Logger.catchBlock(
+        'SchedulePage',
+        'rescheduleAllCourseNotifications',
+        e,
+        st,
+      );
     }
   }
 
@@ -236,14 +261,19 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
     await NotificationService.showInstantNotification(
       id: 9999,
       title: '🔔 ทดสอบระบบแจ้งเตือน',
-      body: 'ระบบแจ้งเตือนของ MyLife ทำงานเรียบร้อย ✅ คุณจะได้รับแจ้งเตือนค่าเรียน 15 นาทีก่อนเริ่มเรียนทุกครั้ง',
+      body:
+          'ระบบแจ้งเตือนของ MyLife ทำงานเรียบร้อย ✅ คุณจะได้รับแจ้งเตือนค่าเรียน 15 นาทีก่อนเริ่มเรียนทุกครั้ง',
     );
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('ส่งการแจ้งเตือนทดสอบแล้ว! เช็คแถบอัปเดงตั้งค่า ↓'),
+          content: const Text(
+            'ส่งการแจ้งเตือนทดสอบแล้ว! เช็คแถบอัปเดงตั้งค่า ↓',
+          ),
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           duration: const Duration(seconds: 3),
         ),
       );
@@ -251,7 +281,8 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
   }
 
   List<dynamic> get _selectedDayClasses {
-    if (_academicTerms.isEmpty || _selectedTermIndex >= _academicTerms.length) return [];
+    if (_academicTerms.isEmpty || _selectedTermIndex >= _academicTerms.length)
+      return [];
     final activeTerm = _academicTerms[_selectedTermIndex];
     final courses = (activeTerm['courses'] ?? activeTerm['Courses']) as List?;
     if (courses == null) return [];
@@ -284,15 +315,23 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
 
       final dartDay = (rawDay == 0) ? 7 : rawDay;
       return dartDay == _selectedDay;
-    }).toList()
-      ..sort((a, b) {
-        final aStart = (a['startTime'] ?? a['StartTime'] ?? '').toString();
-        final bStart = (b['startTime'] ?? b['StartTime'] ?? '').toString();
-        return aStart.compareTo(bStart);
-      });
+    }).toList()..sort((a, b) {
+      final aStart = (a['startTime'] ?? a['StartTime'] ?? '').toString();
+      final bStart = (b['startTime'] ?? b['StartTime'] ?? '').toString();
+      return aStart.compareTo(bStart);
+    });
   }
 
-  String _dayName(int day) => ['', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์', 'อาทิตย์'][day];
+  String _dayName(int day) => [
+    '',
+    'จันทร์',
+    'อังคาร',
+    'พุธ',
+    'พฤหัสบดี',
+    'ศุกร์',
+    'เสาร์',
+    'อาทิตย์',
+  ][day];
 
   String _dayShort(int day) => ['', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส', 'อา'][day];
 
@@ -313,8 +352,17 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
     return diff.isNegative ? Duration.zero : diff;
   }
 
-  Duration _calcCountdownToStart({required int startHour, required int startMin}) {
-    final start = DateTime(_now.year, _now.month, _now.day, startHour, startMin);
+  Duration _calcCountdownToStart({
+    required int startHour,
+    required int startMin,
+  }) {
+    final start = DateTime(
+      _now.year,
+      _now.month,
+      _now.day,
+      startHour,
+      startMin,
+    );
     final diff = start.difference(_now);
     return diff.isNegative ? Duration.zero : diff;
   }
@@ -352,8 +400,14 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
                     children: [
                       Icon(Icons.add_rounded, color: Colors.white, size: 20),
                       SizedBox(width: 6),
-                      Text('เพิ่มภาคเรียนใหม่',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                      Text(
+                        'เพิ่มภาคเรียนใหม่',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -362,7 +416,12 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
               if (_academicTerms.isEmpty)
                 Padding(
                   padding: const EdgeInsets.all(20),
-                  child: Center(child: Text('ยังไม่มีภาคเรียนในระบบ', style: TextStyle(color: cc.ink3))),
+                  child: Center(
+                    child: Text(
+                      'ยังไม่มีภาคเรียนในระบบ',
+                      style: TextStyle(color: cc.ink3),
+                    ),
+                  ),
                 )
               else
                 Column(
@@ -370,21 +429,30 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
                     final term = _academicTerms[i];
                     final isSelected = _selectedTermIndex == i;
                     final courseCount = (term['courses'] as List?)?.length ?? 0;
-                    DateTime? sDate = term['startDate'] != null ? DateTime.tryParse(term['startDate']) : null;
-                    DateTime? eDate = term['endDate'] != null ? DateTime.tryParse(term['endDate']) : null;
+                    DateTime? sDate = term['startDate'] != null
+                        ? DateTime.tryParse(term['startDate'])
+                        : null;
+                    DateTime? eDate = term['endDate'] != null
+                        ? DateTime.tryParse(term['endDate'])
+                        : null;
                     String dateStr = '';
                     if (sDate != null && eDate != null) {
-                      dateStr = '${sDate.day}/${sDate.month}/${sDate.year} - ${eDate.day}/${eDate.month}/${eDate.year}';
+                      dateStr =
+                          '${sDate.day}/${sDate.month}/${sDate.year} - ${eDate.day}/${eDate.month}/${eDate.year}';
                     }
 
                     return Container(
                       margin: const EdgeInsets.only(bottom: 10),
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: isSelected ? cc.accentSoft.withValues(alpha: 0.5) : cc.surface2,
+                        color: isSelected
+                            ? cc.accentSoft.withValues(alpha: 0.5)
+                            : cc.surface2,
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
-                          color: isSelected ? cc.accent : cc.border.withValues(alpha: 0.5),
+                          color: isSelected
+                              ? cc.accent
+                              : cc.border.withValues(alpha: 0.5),
                           width: isSelected ? 1.5 : 1,
                         ),
                       ),
@@ -397,7 +465,11 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
                               color: isSelected ? cc.accent : cc.surface,
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: Icon(Icons.school_rounded, color: isSelected ? Colors.white : cc.accent, size: 20),
+                            child: Icon(
+                              Icons.school_rounded,
+                              color: isSelected ? Colors.white : cc.accent,
+                              size: 20,
+                            ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -409,17 +481,28 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
                                     Expanded(
                                       child: Text(
                                         term['termName'] ?? 'ภาคเรียน',
-                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14.5, color: cc.ink),
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14.5,
+                                          color: cc.ink,
+                                        ),
                                       ),
                                     ),
                                     if (isSelected)
-                                      Pill('ใช้งานอยู่', fg: cc.accent, bg: cc.accentSoft),
+                                      Pill(
+                                        'ใช้งานอยู่',
+                                        fg: cc.accent,
+                                        bg: cc.accentSoft,
+                                      ),
                                   ],
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
                                   '$dateStr • $courseCount วิชา',
-                                  style: TextStyle(fontSize: 12, color: cc.ink3),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: cc.ink3,
+                                  ),
                                 ),
                               ],
                             ),
@@ -439,13 +522,23 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
                                     Navigator.pop(context);
                                   },
                                   child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 6,
+                                    ),
                                     margin: const EdgeInsets.only(right: 6),
                                     decoration: BoxDecoration(
                                       color: cc.accent,
                                       borderRadius: BorderRadius.circular(8),
                                     ),
-                                    child: const Text('เลือก', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                                    child: const Text(
+                                      'เลือก',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
                                   ),
                                 ),
                               GestureDetector(
@@ -455,8 +548,15 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
                                 },
                                 child: Container(
                                   padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(color: cc.surface, borderRadius: BorderRadius.circular(10)),
-                                  child: Icon(Icons.edit_rounded, size: 18, color: cc.ink2),
+                                  decoration: BoxDecoration(
+                                    color: cc.surface,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Icon(
+                                    Icons.edit_rounded,
+                                    size: 18,
+                                    color: cc.ink2,
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: 4),
@@ -467,8 +567,15 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
                                 },
                                 child: Container(
                                   padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(color: cc.coralSoft, borderRadius: BorderRadius.circular(10)),
-                                  child: Icon(Icons.delete_outline_rounded, size: 18, color: cc.coral),
+                                  decoration: BoxDecoration(
+                                    color: cc.coralSoft,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Icon(
+                                    Icons.delete_outline_rounded,
+                                    size: 18,
+                                    color: cc.coral,
+                                  ),
                                 ),
                               ),
                             ],
@@ -492,7 +599,8 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
         ? (DateTime.tryParse(item['startDate']) ?? DateTime.now())
         : DateTime.now();
     DateTime endDate = isEdit && item['endDate'] != null
-        ? (DateTime.tryParse(item['endDate']) ?? DateTime.now().add(const Duration(days: 120)))
+        ? (DateTime.tryParse(item['endDate']) ??
+              DateTime.now().add(const Duration(days: 120)))
         : DateTime.now().add(const Duration(days: 120));
 
     showAppDialog(
@@ -505,7 +613,11 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
           return Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              AppModalField(controller: termController, label: 'ชื่อภาคเรียน เช่น ภาคเรียน 1/2567', icon: Icons.school_rounded),
+              AppModalField(
+                controller: termController,
+                label: 'ชื่อภาคเรียน เช่น ภาคเรียน 1/2567',
+                icon: Icons.school_rounded,
+              ),
               const SizedBox(height: 14),
               GestureDetector(
                 onTap: () async {
@@ -515,7 +627,11 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
                     firstDate: DateTime(2020),
                     lastDate: DateTime(2100),
                     builder: (ctx, child) => Theme(
-                      data: Theme.of(ctx).copyWith(colorScheme: Theme.of(ctx).colorScheme.copyWith(primary: cc.accent)),
+                      data: Theme.of(ctx).copyWith(
+                        colorScheme: Theme.of(
+                          ctx,
+                        ).colorScheme.copyWith(primary: cc.accent),
+                      ),
                       child: child!,
                     ),
                   );
@@ -532,7 +648,11 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
                     firstDate: DateTime(2020),
                     lastDate: DateTime(2100),
                     builder: (ctx, child) => Theme(
-                      data: Theme.of(ctx).copyWith(colorScheme: Theme.of(ctx).colorScheme.copyWith(primary: cc.accent)),
+                      data: Theme.of(ctx).copyWith(
+                        colorScheme: Theme.of(
+                          ctx,
+                        ).colorScheme.copyWith(primary: cc.accent),
+                      ),
                       child: child!,
                     ),
                   );
@@ -545,7 +665,11 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
         },
       ),
       actions: [
-        AppModalButton(label: 'ยกเลิก', onPressed: () => Navigator.pop(context), isPrimary: false),
+        AppModalButton(
+          label: 'ยกเลิก',
+          onPressed: () => Navigator.pop(context),
+          isPrimary: false,
+        ),
         AppModalButton(
           label: 'บันทึก',
           onPressed: () async {
@@ -557,9 +681,20 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
             }
             final userId = await UserSession.getUserId();
             if (isEdit && item?['id'] != null) {
-              await ScheduleApiService.updateTerm(item['id'].toString(), userId, termController.text.trim(), startDate, endDate);
+              await ScheduleApiService.updateTerm(
+                item['id'].toString(),
+                userId,
+                termController.text.trim(),
+                startDate,
+                endDate,
+              );
             } else {
-              await ScheduleApiService.addTerm(userId, termController.text.trim(), startDate, endDate);
+              await ScheduleApiService.addTerm(
+                userId,
+                termController.text.trim(),
+                startDate,
+                endDate,
+              );
             }
             if (mounted) Navigator.pop(context);
             await _loadScheduleData();
@@ -577,9 +712,14 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('ยืนยันการลบภาคเรียน'),
-        content: Text('คุณต้องการลบ "$termName" หรือไม่?\nวิชาเรียนทั้งหมดในภาคเรียนนี้จะถูกลบไปด้วย'),
+        content: Text(
+          'คุณต้องการลบ "$termName" หรือไม่?\nวิชาเรียนทั้งหมดในภาคเรียนนี้จะถูกลบไปด้วย',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('ยกเลิก')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('ยกเลิก'),
+          ),
           TextButton(
             onPressed: () async {
               Navigator.pop(ctx);
@@ -594,7 +734,12 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
     );
   }
 
-  Widget _dateDisplayRow(String label, DateTime date, Color accent, AppColors c) {
+  Widget _dateDisplayRow(
+    String label,
+    DateTime date,
+    Color accent,
+    AppColors c,
+  ) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -605,8 +750,16 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
         children: [
           Icon(Icons.calendar_today_rounded, size: 18, color: accent),
           const SizedBox(width: 10),
-          Expanded(child: Text(label, style: TextStyle(fontWeight: FontWeight.w600, color: c.ink))),
-          Text('${date.day}/${date.month}/${date.year}', style: TextStyle(fontWeight: FontWeight.w700, color: c.ink2)),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(fontWeight: FontWeight.w600, color: c.ink),
+            ),
+          ),
+          Text(
+            '${date.day}/${date.month}/${date.year}',
+            style: TextStyle(fontWeight: FontWeight.w700, color: c.ink2),
+          ),
           const SizedBox(width: 6),
           Icon(Icons.chevron_right_rounded, size: 18, color: c.ink3),
         ],
@@ -616,15 +769,28 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
 
   void _openCourseModal([dynamic item]) {
     final isEdit = item != null;
-    final codeController = TextEditingController(text: item?['courseCode'] ?? '');
-    final nameController = TextEditingController(text: item?['courseName'] ?? '');
+    final codeController = TextEditingController(
+      text: item?['courseCode'] ?? '',
+    );
+    final nameController = TextEditingController(
+      text: item?['courseName'] ?? '',
+    );
     final roomController = TextEditingController(text: item?['room'] ?? '');
-    final instructorController = TextEditingController(text: item?['instructor'] ?? '');
+    final instructorController = TextEditingController(
+      text: item?['instructor'] ?? '',
+    );
     int rawDay = item?['dayOfWeek'] ?? _selectedDay;
     int dayOfWeek = (rawDay == 0) ? 7 : rawDay;
     TimeOfDay startTime = _parseTime(item?['startTime'] ?? '09:00');
     TimeOfDay endTime = _parseTime(item?['endTime'] ?? '10:00');
-    String targetTermId = (item?['termId'] ?? item?['academicTermId'] ?? _termId ?? (_academicTerms.isNotEmpty ? _academicTerms[_selectedTermIndex]['id'] : '')).toString();
+    String targetTermId =
+        (item?['termId'] ??
+                item?['academicTermId'] ??
+                _termId ??
+                (_academicTerms.isNotEmpty
+                    ? _academicTerms[_selectedTermIndex]['id']
+                    : ''))
+            .toString();
 
     showAppBottomSheet(
       context,
@@ -632,8 +798,13 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
       child: StatefulBuilder(
         builder: (context, setModalState) {
           final cc = context.c;
-          final activeTermObj = _academicTerms.firstWhere((t) => t['id'].toString() == targetTermId, orElse: () => null);
-          final activeTermName = activeTermObj != null ? (activeTermObj['termName'] ?? 'ภาคเรียน') : _termName;
+          final activeTermObj = _academicTerms.firstWhere(
+            (t) => t['id'].toString() == targetTermId,
+            orElse: () => null,
+          );
+          final activeTermName = activeTermObj != null
+              ? (activeTermObj['termName'] ?? 'ภาคเรียน')
+              : _termName;
 
           return Column(
             mainAxisSize: MainAxisSize.min,
@@ -644,35 +815,61 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
                 AppModalSection(
                   title: 'ภาคเรียนที่จะบันทึกวิชาลงไป',
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: cc.accentSoft.withValues(alpha: 0.3),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: cc.accent.withValues(alpha: 0.3)),
+                      border: Border.all(
+                        color: cc.accent.withValues(alpha: 0.3),
+                      ),
                     ),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<String>(
-                        value: targetTermId.isNotEmpty && _academicTerms.any((t) => t['id'].toString() == targetTermId)
+                        value:
+                            targetTermId.isNotEmpty &&
+                                _academicTerms.any(
+                                  (t) => t['id'].toString() == targetTermId,
+                                )
                             ? targetTermId
                             : null,
                         isExpanded: true,
-                        icon: Icon(Icons.arrow_drop_down_rounded, color: cc.accent),
-                        items: _academicTerms.map<DropdownMenuItem<String>>((t) {
+                        icon: Icon(
+                          Icons.arrow_drop_down_rounded,
+                          color: cc.accent,
+                        ),
+                        items: _academicTerms.map<DropdownMenuItem<String>>((
+                          t,
+                        ) {
                           final id = t['id'].toString();
                           final name = t['termName'] ?? 'ภาคเรียน';
                           return DropdownMenuItem<String>(
                             value: id,
                             child: Row(
                               children: [
-                                Icon(Icons.school_rounded, size: 16, color: cc.accent),
+                                Icon(
+                                  Icons.school_rounded,
+                                  size: 16,
+                                  color: cc.accent,
+                                ),
                                 const SizedBox(width: 8),
-                                Text(name, style: TextStyle(fontWeight: FontWeight.bold, color: cc.ink, fontSize: 13.5)),
+                                Text(
+                                  name,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: cc.ink,
+                                    fontSize: 13.5,
+                                  ),
+                                ),
                               ],
                             ),
                           );
                         }).toList(),
                         onChanged: (val) {
-                          if (val != null) setModalState(() => targetTermId = val);
+                          if (val != null)
+                            setModalState(() => targetTermId = val);
                         },
                       ),
                     ),
@@ -681,7 +878,10 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
               else
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
                     color: cc.accentSoft.withValues(alpha: 0.3),
                     borderRadius: BorderRadius.circular(12),
@@ -691,19 +891,42 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
                     children: [
                       Icon(Icons.school_rounded, size: 18, color: cc.accent),
                       const SizedBox(width: 8),
-                      Text('บันทึกลงภาคเรียน: $activeTermName', style: TextStyle(fontWeight: FontWeight.w700, color: cc.accent, fontSize: 13)),
+                      Text(
+                        'บันทึกลงภาคเรียน: $activeTermName',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: cc.accent,
+                          fontSize: 13,
+                        ),
+                      ),
                     ],
                   ),
                 ),
               const SizedBox(height: 14),
 
-              AppModalField(controller: codeController, label: 'รหัสวิชา', icon: Icons.tag_rounded),
+              AppModalField(
+                controller: codeController,
+                label: 'รหัสวิชา',
+                icon: Icons.tag_rounded,
+              ),
               const SizedBox(height: 12),
-              AppModalField(controller: nameController, label: 'ชื่อวิชา', icon: Icons.book_rounded),
+              AppModalField(
+                controller: nameController,
+                label: 'ชื่อวิชา',
+                icon: Icons.book_rounded,
+              ),
               const SizedBox(height: 12),
-              AppModalField(controller: roomController, label: 'ห้องเรียน', icon: Icons.meeting_room_rounded),
+              AppModalField(
+                controller: roomController,
+                label: 'ห้องเรียน',
+                icon: Icons.meeting_room_rounded,
+              ),
               const SizedBox(height: 12),
-              AppModalField(controller: instructorController, label: 'ผู้สอน', icon: Icons.person_rounded),
+              AppModalField(
+                controller: instructorController,
+                label: 'ผู้สอน',
+                icon: Icons.person_rounded,
+              ),
               const SizedBox(height: 12),
 
               // Day selector chips
@@ -719,13 +942,25 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
                       onTap: () => setModalState(() => dayOfWeek = day),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
                         decoration: BoxDecoration(
                           color: selected ? cc.accent : cc.surface2,
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: selected ? cc.accent : cc.border),
+                          border: Border.all(
+                            color: selected ? cc.accent : cc.border,
+                          ),
                         ),
-                        child: Text(_dayShort(day), style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: selected ? Colors.white : cc.ink3)),
+                        child: Text(
+                          _dayShort(day),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                            color: selected ? Colors.white : cc.ink3,
+                          ),
+                        ),
                       ),
                     );
                   }),
@@ -739,7 +974,10 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
                 title: 'เวลาเรียน',
                 child: Container(
                   padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(color: cc.surface2, borderRadius: BorderRadius.circular(14)),
+                  decoration: BoxDecoration(
+                    color: cc.surface2,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                   child: Column(
                     children: [
                       GestureDetector(
@@ -748,11 +986,16 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
                             context: context,
                             initialTime: startTime,
                             builder: (ctx, child) => Theme(
-                              data: Theme.of(ctx).copyWith(colorScheme: Theme.of(ctx).colorScheme.copyWith(primary: cc.accent)),
+                              data: Theme.of(ctx).copyWith(
+                                colorScheme: Theme.of(
+                                  ctx,
+                                ).colorScheme.copyWith(primary: cc.accent),
+                              ),
                               child: child!,
                             ),
                           );
-                          if (picked != null) setModalState(() => startTime = picked);
+                          if (picked != null)
+                            setModalState(() => startTime = picked);
                         },
                         child: _timeRow('เวลาเริ่ม', startTime, cc),
                       ),
@@ -763,11 +1006,16 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
                             context: context,
                             initialTime: endTime,
                             builder: (ctx, child) => Theme(
-                              data: Theme.of(ctx).copyWith(colorScheme: Theme.of(ctx).colorScheme.copyWith(primary: cc.accent)),
+                              data: Theme.of(ctx).copyWith(
+                                colorScheme: Theme.of(
+                                  ctx,
+                                ).colorScheme.copyWith(primary: cc.accent),
+                              ),
                               child: child!,
                             ),
                           );
-                          if (picked != null) setModalState(() => endTime = picked);
+                          if (picked != null)
+                            setModalState(() => endTime = picked);
                         },
                         child: _timeRow('เวลาสิ้นสุด', endTime, cc),
                       ),
@@ -784,13 +1032,26 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
                       onTap: () => _confirmDelete(item, context),
                       child: Container(
                         padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(color: cc.coralSoft, borderRadius: BorderRadius.circular(12)),
-                        child: Icon(Icons.delete_outline_rounded, color: cc.coral, size: 20),
+                        decoration: BoxDecoration(
+                          color: cc.coralSoft,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          Icons.delete_outline_rounded,
+                          color: cc.coral,
+                          size: 20,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 8),
                   ],
-                  Expanded(child: AppModalButton(label: 'ยกเลิก', onPressed: () => Navigator.pop(context), isPrimary: false)),
+                  Expanded(
+                    child: AppModalButton(
+                      label: 'ยกเลิก',
+                      onPressed: () => Navigator.pop(context),
+                      isPrimary: false,
+                    ),
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: AppModalButton(
@@ -806,18 +1067,32 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
 
                         final userId = await UserSession.getUserId();
                         if (_termId == null || _termId!.isEmpty) {
-                          final defaultTermName = (_termName == 'ยังไม่ได้ตั้งค่าภาคเรียน' || _termName.isEmpty) ? 'ภาคเรียนที่ 1' : _termName;
-                          final termRes = await ScheduleApiService.addTerm(userId, defaultTermName, _termStartDate, _termEndDate);
+                          final defaultTermName =
+                              (_termName == 'ยังไม่ได้ตั้งค่าภาคเรียน' ||
+                                  _termName.isEmpty)
+                              ? 'ภาคเรียนที่ 1'
+                              : _termName;
+                          final termRes = await ScheduleApiService.addTerm(
+                            userId,
+                            defaultTermName,
+                            _termStartDate,
+                            _termEndDate,
+                          );
                           if (termRes != null) {
-                            _termId = (termRes['id'] ?? termRes['Id'])?.toString();
+                            _termId = (termRes['id'] ?? termRes['Id'])
+                                ?.toString();
                             _termName = defaultTermName;
                           }
                         }
 
-                        final startStr = '${_pad(startTime.hour)}:${_pad(startTime.minute)}';
-                        final endStr = '${_pad(endTime.hour)}:${_pad(endTime.minute)}';
+                        final startStr =
+                            '${_pad(startTime.hour)}:${_pad(startTime.minute)}';
+                        final endStr =
+                            '${_pad(endTime.hour)}:${_pad(endTime.minute)}';
 
-                        final termIdToUse = targetTermId.isNotEmpty ? targetTermId : (_termId ?? '');
+                        final termIdToUse = targetTermId.isNotEmpty
+                            ? targetTermId
+                            : (_termId ?? '');
 
                         if (isEdit && item != null && item['id'] != null) {
                           await ScheduleApiService.updateCourse(
@@ -845,11 +1120,14 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
                         }
 
                         // ตั้งเวลาแจ้งเตือนล่วงหน้า 15 นาที ก่อนเข้าเรียนทุกสัปดาห์
-                        final notifId = ((item?['id'] ?? finalName).hashCode).abs() % 2147483647;
+                        final notifId =
+                            ((item?['id'] ?? finalName).hashCode).abs() %
+                            2147483647;
                         await NotificationService.scheduleWeeklyCourseNotification(
                           id: notifId,
                           title: '🎓 เตรียมตัวเรียนวิชา $finalName',
-                          body: 'จะเริ่มเรียนเวลา $startStr น. (ห้อง ${roomController.text.trim().isNotEmpty ? roomController.text.trim() : "-"})',
+                          body:
+                              'จะเริ่มเรียนเวลา $startStr น. (ห้อง ${roomController.text.trim().isNotEmpty ? roomController.text.trim() : "-"})',
                           dayOfWeek: dayOfWeek,
                           hour: startTime.hour,
                           minute: startTime.minute,
@@ -886,11 +1164,25 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
               Container(
                 width: 56,
                 height: 56,
-                decoration: BoxDecoration(color: c.coralSoft, borderRadius: BorderRadius.circular(16)),
-                child: Icon(Icons.delete_outline_rounded, color: c.coral, size: 28),
+                decoration: BoxDecoration(
+                  color: c.coralSoft,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(
+                  Icons.delete_outline_rounded,
+                  color: c.coral,
+                  size: 28,
+                ),
               ),
               const SizedBox(height: 16),
-              Text('ลบวิชานี้?', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: c.ink)),
+              Text(
+                'ลบวิชานี้?',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: c.ink,
+                ),
+              ),
               const SizedBox(height: 6),
               Text(
                 'ต้องการลบ "${item['courseName'] ?? ''}" ออกจากรายการ',
@@ -901,7 +1193,11 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
               Row(
                 children: [
                   Expanded(
-                    child: AppModalButton(label: 'ยกเลิก', onPressed: () => Navigator.pop(ctx), isPrimary: false),
+                    child: AppModalButton(
+                      label: 'ยกเลิก',
+                      onPressed: () => Navigator.pop(ctx),
+                      isPrimary: false,
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -910,7 +1206,9 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
                       isDestructive: true,
                       onPressed: () async {
                         if (item['id'] != null) {
-                          final notifId = (item['id'].toString().hashCode).abs() % 2147483647;
+                          final notifId =
+                              (item['id'].toString().hashCode).abs() %
+                              2147483647;
                           await NotificationService.cancelNotification(notifId);
                         }
                         await ScheduleApiService.deleteCourse(item['id']);
@@ -933,7 +1231,10 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
   TimeOfDay _parseTime(String timeStr) {
     try {
       final parts = timeStr.split(':');
-      return TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts.length > 1 ? parts[1] : '0'));
+      return TimeOfDay(
+        hour: int.parse(parts[0]),
+        minute: int.parse(parts.length > 1 ? parts[1] : '0'),
+      );
     } catch (_) {
       return const TimeOfDay(hour: 9, minute: 0);
     }
@@ -944,14 +1245,28 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
   Widget _timeRow(String label, TimeOfDay time, AppColors c) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(color: c.surface, borderRadius: BorderRadius.circular(12), border: Border.all(color: c.border.withValues(alpha: 0.5))),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.border.withValues(alpha: 0.5)),
+      ),
       child: Row(
         children: [
           Icon(Icons.access_time_rounded, size: 18, color: c.accent),
           const SizedBox(width: 10),
-          Text(label, style: TextStyle(fontWeight: FontWeight.w600, color: c.ink2)),
+          Text(
+            label,
+            style: TextStyle(fontWeight: FontWeight.w600, color: c.ink2),
+          ),
           const Spacer(),
-          Text('${_pad(time.hour)}:${_pad(time.minute)}', style: TextStyle(fontWeight: FontWeight.w700, color: c.accent, fontSize: 15)),
+          Text(
+            '${_pad(time.hour)}:${_pad(time.minute)}',
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: c.accent,
+              fontSize: 15,
+            ),
+          ),
         ],
       ),
     );
@@ -960,6 +1275,7 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
   @override
   Widget build(BuildContext context) {
     final c = context.c;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final dayClasses = _selectedDayClasses;
 
     return Scaffold(
@@ -967,12 +1283,21 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
         decoration: BoxDecoration(
           gradient: c.accentGradient,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: c.accent.withValues(alpha: 0.35), blurRadius: 12, offset: const Offset(0, 4))],
+          boxShadow: [
+            BoxShadow(
+              color: c.accent.withValues(alpha: 0.35),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: FloatingActionButton.extended(
           onPressed: () => _openCourseModal(),
           icon: const Icon(Icons.add_rounded, color: Colors.white),
-          label: const Text('เพิ่มวิชา', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+          label: const Text(
+            'เพิ่มวิชา',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+          ),
           backgroundColor: Colors.transparent,
           elevation: 0,
         ),
@@ -990,25 +1315,52 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('ตารางเรียน', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, letterSpacing: -0.7, color: c.ink)),
+                      Text(
+                        'ตารางเรียน',
+                        style: TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -0.7,
+                          color: c.ink,
+                        ),
+                      ),
                       const SizedBox(height: 4),
-                      Text(_termName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: c.ink3)),
+                      Text(
+                        _termName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w500,
+                          color: c.ink3,
+                        ),
+                      ),
                     ],
                   ),
                 ),
                 GestureDetector(
                   onTap: _openAcademicTermModal,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(color: c.accentSoft, borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: c.accentSoft,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                     child: Row(
                       children: [
                         Icon(Icons.settings_rounded, size: 16, color: c.accent),
                         const SizedBox(width: 4),
-                        Text('ตั้งค่าเทอม', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.accent)),
+                        Text(
+                          'ตั้งค่าเทอม',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: c.accent,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -1023,7 +1375,11 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: c.good.withValues(alpha: 0.3)),
                     ),
-                    child: Icon(Icons.notifications_active_rounded, size: 18, color: c.good),
+                    child: Icon(
+                      Icons.notifications_active_rounded,
+                      size: 18,
+                      color: c.good,
+                    ),
                   ),
                 ),
               ],
@@ -1047,12 +1403,19 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
                         },
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 200),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 8,
+                          ),
                           decoration: BoxDecoration(
-                            color: _selectedTermIndex == i ? c.accent : c.surface2,
+                            color: _selectedTermIndex == i
+                                ? c.accent
+                                : c.surface2,
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: _selectedTermIndex == i ? c.accent : c.border.withValues(alpha: 0.5),
+                              color: _selectedTermIndex == i
+                                  ? c.accent
+                                  : c.border.withValues(alpha: 0.5),
                             ),
                           ),
                           child: Row(
@@ -1060,7 +1423,9 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
                               Icon(
                                 Icons.school_rounded,
                                 size: 14,
-                                color: _selectedTermIndex == i ? Colors.white : c.ink3,
+                                color: _selectedTermIndex == i
+                                    ? Colors.white
+                                    : c.ink3,
                               ),
                               const SizedBox(width: 6),
                               Text(
@@ -1068,7 +1433,9 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
                                 style: TextStyle(
                                   fontSize: 12.5,
                                   fontWeight: FontWeight.w700,
-                                  color: _selectedTermIndex == i ? Colors.white : c.ink2,
+                                  color: _selectedTermIndex == i
+                                      ? Colors.white
+                                      : c.ink2,
                                 ),
                               ),
                             ],
@@ -1080,7 +1447,10 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
                     GestureDetector(
                       onTap: () => _openAddOrEditTermModal(),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
                         decoration: BoxDecoration(
                           color: c.accentSoft,
                           borderRadius: BorderRadius.circular(12),
@@ -1089,7 +1459,14 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
                           children: [
                             Icon(Icons.add_rounded, size: 16, color: c.accent),
                             const SizedBox(width: 4),
-                            Text('เพิ่มเทอม', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: c.accent)),
+                            Text(
+                              'เพิ่มเทอม',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: c.accent,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -1103,7 +1480,10 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
             if (_academicTerms.isNotEmpty) ...[
               const SizedBox(height: 12),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: c.accentSoft.withValues(alpha: 0.4),
                   borderRadius: BorderRadius.circular(12),
@@ -1118,13 +1498,21 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
                         '${_termStartDate.day}/${_termStartDate.month}/${_termStartDate.year} — ${_termEndDate.day}/${_termEndDate.month}/${_termEndDate.year}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: c.accent),
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: c.accent,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Text(
                       '${(_academicTerms.isNotEmpty && _selectedTermIndex < _academicTerms.length ? ((_academicTerms[_selectedTermIndex]['courses'] ?? _academicTerms[_selectedTermIndex]['Courses']) as List?)?.length : 0) ?? 0} วิชา',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: c.ink3),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: c.ink3,
+                      ),
                     ),
                   ],
                 ),
@@ -1138,7 +1526,9 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
                 valueListenable: ApiClient.isConnectingLong,
                 builder: (context, isLong, child) {
                   return ServerConnectingWidget(
-                    message: isLong ? 'กำลังปลุกเซิร์ฟเวอร์...' : 'กำลังดึงตารางเรียน...',
+                    message: isLong
+                        ? 'กำลังปลุกเซิร์ฟเวอร์...'
+                        : 'กำลังดึงตารางเรียน...',
                     subMessage: isLong
                         ? 'เซิร์ฟเวอร์กำลังสตาร์ทขึ้นมาใหม่ โปรดรอสักครู่...'
                         : 'กำลังดึงข้อมูลรายวิชาและภาคการเรียนของคุณ...',
@@ -1147,74 +1537,149 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
               ),
               const SizedBox(height: 16),
               const SkeletonCard(height: 140, borderRadius: 20),
-            ]
-            else ...[
-              // Day selector chips
-              SectionCard(
-                title: 'เลือกวัน',
-                caption: 'เลือกวันเพื่อดูตารางเรียน',
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: List.generate(7, (i) {
-                      final day = i + 1;
-                      final selected = _selectedDay == day;
-                      final isToday = day == DateTime.now().weekday;
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: GestureDetector(
-                          onTap: () => setState(() => _selectedDay = day),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            width: 52,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            decoration: BoxDecoration(
-                              color: selected ? c.accent : (isToday ? c.accentSoft : c.surface2),
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: selected ? c.accent : (isToday ? c.accent.withValues(alpha: 0.3) : c.border),
+            ] else ...[
+              // 1. Calendar Week Ribbon
+              Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: c.surface,
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(
+                    color: isDark
+                        ? c.border.withValues(alpha: 0.8)
+                        : c.border.withValues(alpha: 0.6),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: isDark
+                          ? Colors.black.withValues(alpha: 0.2)
+                          : c.ink.withValues(alpha: 0.03),
+                      blurRadius: 16,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: List.generate(7, (i) {
+                    final day = i + 1;
+                    final selected = _selectedDay == day;
+                    final isToday = day == DateTime.now().weekday;
+                    return Expanded(
+                      child: GestureDetector(
+                        onTap: () => setState(() => _selectedDay = day),
+                        behavior: HitTestBehavior.opaque,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 220),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          decoration: BoxDecoration(
+                            gradient: selected ? c.accentGradient : null,
+                            color: selected
+                                ? null
+                                : (isToday
+                                      ? c.accentSoft.withValues(alpha: 0.4)
+                                      : Colors.transparent),
+                            borderRadius: BorderRadius.circular(16),
+                            border: isToday && !selected
+                                ? Border.all(
+                                    color: c.accent.withValues(alpha: 0.35),
+                                  )
+                                : null,
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                _dayShort(day),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: selected
+                                      ? FontWeight.w900
+                                      : FontWeight.w600,
+                                  color: selected
+                                      ? Colors.white
+                                      : (isToday ? c.accent : c.ink3),
+                                ),
                               ),
-                            ),
-                            child: Column(
-                              children: [
-                                Text(_dayShort(day), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: selected ? Colors.white : c.ink3)),
-                                const SizedBox(height: 4),
-                                if (isToday)
-                                  Container(
-                                    width: 6,
-                                    height: 6,
-                                    decoration: BoxDecoration(color: selected ? Colors.white : c.accent, shape: BoxShape.circle),
-                                  ),
-                              ],
-                            ),
+                              const SizedBox(height: 4),
+                              Container(
+                                width: 5,
+                                height: 5,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: selected
+                                      ? Colors.white
+                                      : (isToday
+                                            ? c.accent
+                                            : Colors.transparent),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      );
-                    }),
-                  ),
+                      ),
+                    );
+                  }),
                 ),
               ),
-              const SizedBox(height: 16),
 
-              // Timeline for selected day
+              // 2. Schedule for Selected Day
               SectionCard(
-                title: '${_dayName(_selectedDay)}นี้',
-                caption: dayClasses.isNotEmpty ? '${dayClasses.length} วิชา' : 'ว่าง',
+                title: 'ตารางวัน${_dayName(_selectedDay)}',
+                caption: dayClasses.isNotEmpty
+                    ? '${dayClasses.length} วิชา'
+                    : 'ไม่มีคาบเรียน',
+                icon: Icons.calendar_today_rounded,
                 child: dayClasses.isNotEmpty
                     ? Column(
                         children: [
                           for (var i = 0; i < dayClasses.length; i++)
-                            _buildClassTimelineTile(dayClasses[i], i, dayClasses.length, c),
+                            _buildClassTimelineTile(
+                              dayClasses[i],
+                              i,
+                              dayClasses.length,
+                              c,
+                            ),
                         ],
                       )
                     : Padding(
-                        padding: const EdgeInsets.all(24),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 32,
+                          horizontal: 16,
+                        ),
                         child: Center(
                           child: Column(
                             children: [
-                              Icon(Icons.event_busy_rounded, size: 40, color: c.ink3.withValues(alpha: 0.4)),
-                              const SizedBox(height: 8),
-                              Text('ไม่มีวิชาเรียนวัน${_dayName(_selectedDay)}', style: TextStyle(color: c.ink3)),
+                              Container(
+                                width: 56,
+                                height: 56,
+                                decoration: BoxDecoration(
+                                  color: c.surface2,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  Icons.event_available_rounded,
+                                  size: 28,
+                                  color: c.ink3,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'ไม่มีวิชาเรียนในวัน${_dayName(_selectedDay)}',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                  color: c.ink2,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'พักผ่อน หรือทำงานที่ค้างอยู่ได้อย่างเต็มที่ ✨',
+                                style: TextStyle(color: c.ink3, fontSize: 12),
+                              ),
                             ],
                           ),
                         ),
@@ -1222,13 +1687,18 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
               ),
               const SizedBox(height: 16),
 
-              // Weekly timetable
+              // 3. Weekly timetable overview
               SectionCard(
-                title: 'ตารางเรียนรายสัปดาห์',
+                title: 'ตารางเรียนทั้งสัปดาห์',
                 caption: 'ภาพรวมทั้งสัปดาห์',
+                icon: Icons.grid_on_rounded,
                 child: TimetableView(
-                  courses: (_academicTerms.isNotEmpty && _selectedTermIndex < _academicTerms.length)
-                      ? (_academicTerms[_selectedTermIndex]['courses'] as List? ?? [])
+                  courses:
+                      (_academicTerms.isNotEmpty &&
+                          _selectedTermIndex < _academicTerms.length)
+                      ? (_academicTerms[_selectedTermIndex]['courses']
+                                as List? ??
+                            [])
                       : [],
                 ),
               ),
@@ -1239,13 +1709,30 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
     );
   }
 
-  Widget _buildClassTimelineTile(dynamic course, int index, int total, AppColors c) {
+  Widget _buildClassTimelineTile(
+    dynamic course,
+    int index,
+    int total,
+    AppColors c,
+  ) {
     final isLast = index == total - 1;
     final now = _now;
     final startTime = _parseTime(course['startTime'] ?? '09:00');
     final endTime = _parseTime(course['endTime'] ?? '10:00');
-    final courseStart = DateTime(now.year, now.month, now.day, startTime.hour, startTime.minute);
-    final courseEnd = DateTime(now.year, now.month, now.day, endTime.hour, endTime.minute);
+    final courseStart = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      startTime.hour,
+      startTime.minute,
+    );
+    final courseEnd = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      endTime.hour,
+      endTime.minute,
+    );
 
     bool isCurrent = false;
     bool isPast = false;
@@ -1260,7 +1747,13 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
         // (supports multiple classes starting simultaneously)
         final upcomingClasses = _selectedDayClasses.where((cl) {
           final st = _parseTime(cl['startTime'] ?? '09:00');
-          return DateTime(now.year, now.month, now.day, st.hour, st.minute).isAfter(now);
+          return DateTime(
+            now.year,
+            now.month,
+            now.day,
+            st.hour,
+            st.minute,
+          ).isAfter(now);
         }).toList();
         if (upcomingClasses.isNotEmpty) {
           final earliestStart = upcomingClasses.first['startTime'];
@@ -1271,24 +1764,34 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
       }
     }
 
-    final color = isCurrent ? c.accent : (isPast ? c.ink3 : (isNext ? c.blue : c.blue));
+    final color = isCurrent
+        ? c.accent
+        : (isPast ? c.ink3 : (isNext ? c.blue : c.blue));
     final bgColor = isCurrent
         ? c.accentSoft.withValues(alpha: 0.4)
         : (isPast
-            ? c.surface2
-            : (isNext ? c.blue.withValues(alpha: 0.1) : c.blue.withValues(alpha: 0.06)));
+              ? c.surface2
+              : (isNext
+                    ? c.blue.withValues(alpha: 0.1)
+                    : c.blue.withValues(alpha: 0.06)));
 
     // Compute countdown string
     String? countdownText;
     String? countdownLabel;
     if (isCurrent) {
-      final remaining = _calcCountdownFor(endHour: endTime.hour, endMin: endTime.minute);
+      final remaining = _calcCountdownFor(
+        endHour: endTime.hour,
+        endMin: endTime.minute,
+      );
       if (remaining.inSeconds > 0) {
         countdownText = _formatCountdown(remaining);
         countdownLabel = 'เหลือ';
       }
     } else if (isNext) {
-      final until = _calcCountdownToStart(startHour: startTime.hour, startMin: startTime.minute);
+      final until = _calcCountdownToStart(
+        startHour: startTime.hour,
+        startMin: startTime.minute,
+      );
       if (until.inSeconds > 0) {
         countdownText = _formatCountdown(until);
         countdownLabel = 'อีก';
@@ -1310,8 +1813,17 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
                   decoration: BoxDecoration(
                     color: color,
                     shape: BoxShape.circle,
-                    border: isCurrent ? Border.all(color: c.accent, width: 3) : null,
-                    boxShadow: isCurrent ? [BoxShadow(color: c.accent.withValues(alpha: 0.4), blurRadius: 6)] : null,
+                    border: isCurrent
+                        ? Border.all(color: c.accent, width: 3)
+                        : null,
+                    boxShadow: isCurrent
+                        ? [
+                            BoxShadow(
+                              color: c.accent.withValues(alpha: 0.4),
+                              blurRadius: 6,
+                            ),
+                          ]
+                        : null,
                   ),
                 ),
                 if (!isLast)
@@ -1320,7 +1832,9 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
                       width: 2,
                       margin: const EdgeInsets.symmetric(vertical: 2),
                       decoration: BoxDecoration(
-                        color: isPast ? c.border : c.accent.withValues(alpha: 0.2),
+                        color: isPast
+                            ? c.border
+                            : c.accent.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(1),
                       ),
                     ),
@@ -1339,7 +1853,9 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
               decoration: BoxDecoration(
                 color: (isCurrent || isNext) && _isBlinking ? color : bgColor,
                 borderRadius: BorderRadius.circular(14),
-                border: isCurrent ? Border.all(color: c.accent.withValues(alpha: 0.3)) : null,
+                border: isCurrent
+                    ? Border.all(color: c.accent.withValues(alpha: 0.3))
+                    : null,
               ),
               child: Row(
                 children: [
@@ -1355,67 +1871,150 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
                                 style: TextStyle(
                                   fontWeight: FontWeight.w700,
                                   fontSize: 14,
-                                  color: (isCurrent || isNext) && _isBlinking ? Colors.white : (isPast ? c.ink3 : c.ink),
+                                  color: (isCurrent || isNext) && _isBlinking
+                                      ? Colors.white
+                                      : (isPast ? c.ink3 : c.ink),
                                 ),
                               ),
                             ),
                             if (isCurrent)
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(color: _isBlinking ? Colors.white : c.accent, borderRadius: BorderRadius.circular(8)),
-                                child: Text('กำลังเรียน', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: _isBlinking ? c.accent : Colors.white)),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _isBlinking ? Colors.white : c.accent,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  'กำลังเรียน',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    color: _isBlinking
+                                        ? c.accent
+                                        : Colors.white,
+                                  ),
+                                ),
                               ),
                             if (isNext)
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(color: _isBlinking ? Colors.white : c.blue.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
-                                child: Text('ถัดไป', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: _isBlinking ? c.blue : c.blue)),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _isBlinking
+                                      ? Colors.white
+                                      : c.blue.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  'ถัดไป',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    color: _isBlinking ? c.blue : c.blue,
+                                  ),
+                                ),
                               ),
                             if (isPast)
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(color: c.surface2, borderRadius: BorderRadius.circular(8)),
-                                child: Text('แล้ว', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: c.ink3)),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: c.surface2,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  'แล้ว',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    color: c.ink3,
+                                  ),
+                                ),
                               ),
                           ],
                         ),
                         const SizedBox(height: 4),
                         Row(
                           children: [
-                            Icon(Icons.access_time_rounded, size: 13, color: (isCurrent || isNext) && _isBlinking ? Colors.white70 : c.ink3),
+                            Icon(
+                              Icons.access_time_rounded,
+                              size: 13,
+                              color: (isCurrent || isNext) && _isBlinking
+                                  ? Colors.white70
+                                  : c.ink3,
+                            ),
                             const SizedBox(width: 4),
                             Text(
                               '${course['startTime'] ?? ''} - ${course['endTime'] ?? ''} น.',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: (isCurrent || isNext) && _isBlinking ? Colors.white70 : c.ink3),
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: (isCurrent || isNext) && _isBlinking
+                                    ? Colors.white70
+                                    : c.ink3,
+                              ),
                             ),
                             const SizedBox(width: 12),
-                            Icon(Icons.meeting_room_rounded, size: 13, color: (isCurrent || isNext) && _isBlinking ? Colors.white70 : c.ink3),
+                            Icon(
+                              Icons.meeting_room_rounded,
+                              size: 13,
+                              color: (isCurrent || isNext) && _isBlinking
+                                  ? Colors.white70
+                                  : c.ink3,
+                            ),
                             const SizedBox(width: 4),
                             Flexible(
                               child: Text(
                                 course['room'] ?? '',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: (isCurrent || isNext) && _isBlinking ? Colors.white70 : c.ink3),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: (isCurrent || isNext) && _isBlinking
+                                      ? Colors.white70
+                                      : c.ink3,
+                                ),
                               ),
                             ),
                           ],
                         ),
-                        if (course['instructor'] != null && (course['instructor'] as String).isNotEmpty)
+                        if (course['instructor'] != null &&
+                            (course['instructor'] as String).isNotEmpty)
                           Padding(
                             padding: const EdgeInsets.only(top: 4),
                             child: Row(
                               children: [
-                                Icon(Icons.person_rounded, size: 13, color: (isCurrent || isNext) && _isBlinking ? Colors.white70 : c.ink3),
+                                Icon(
+                                  Icons.person_rounded,
+                                  size: 13,
+                                  color: (isCurrent || isNext) && _isBlinking
+                                      ? Colors.white70
+                                      : c.ink3,
+                                ),
                                 const SizedBox(width: 4),
                                 Flexible(
                                   child: Text(
                                     course['instructor'],
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: (isCurrent || isNext) && _isBlinking ? Colors.white70 : c.ink3),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                      color:
+                                          (isCurrent || isNext) && _isBlinking
+                                          ? Colors.white70
+                                          : c.ink3,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -1425,20 +2024,42 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
                           Padding(
                             padding: const EdgeInsets.only(top: 8),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 5,
+                              ),
                               decoration: BoxDecoration(
-                                color: _isBlinking ? Colors.white.withValues(alpha: 0.2) : color.withValues(alpha: 0.12),
+                                color: _isBlinking
+                                    ? Colors.white.withValues(alpha: 0.2)
+                                    : color.withValues(alpha: 0.12),
                                 borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: _isBlinking ? Colors.white.withValues(alpha: 0.4) : color.withValues(alpha: 0.25)),
+                                border: Border.all(
+                                  color: _isBlinking
+                                      ? Colors.white.withValues(alpha: 0.4)
+                                      : color.withValues(alpha: 0.25),
+                                ),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.timer_rounded, size: 13, color: (isCurrent || isNext) && _isBlinking ? Colors.white : color),
+                                  Icon(
+                                    Icons.timer_rounded,
+                                    size: 13,
+                                    color: (isCurrent || isNext) && _isBlinking
+                                        ? Colors.white
+                                        : color,
+                                  ),
                                   const SizedBox(width: 5),
                                   Text(
                                     '$countdownLabel $countdownText',
-                                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: (isCurrent || isNext) && _isBlinking ? Colors.white : color),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w800,
+                                      color:
+                                          (isCurrent || isNext) && _isBlinking
+                                          ? Colors.white
+                                          : color,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -1452,7 +2073,10 @@ class _SchedulePageState extends State<SchedulePage> with WidgetsBindingObserver
                     onTap: () => _openCourseModal(course),
                     child: Container(
                       padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(color: c.surface2, borderRadius: BorderRadius.circular(8)),
+                      decoration: BoxDecoration(
+                        color: c.surface2,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                       child: Icon(Icons.edit_rounded, size: 16, color: c.ink3),
                     ),
                   ),

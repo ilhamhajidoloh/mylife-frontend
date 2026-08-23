@@ -9,7 +9,6 @@ import '../services/user_session.dart';
 import '../services/cache_service.dart';
 import '../services/logger.dart';
 import '../services/data_event_service.dart';
-import 'profile_page.dart';
 
 class OverviewPage extends StatefulWidget {
   const OverviewPage({super.key});
@@ -21,7 +20,7 @@ class OverviewPage extends StatefulWidget {
 class _OverviewPageState extends State<OverviewPage>
     with WidgetsBindingObserver {
   bool _isLoading = true;
-  String _userName = 'ผู้ใช้งาน';
+  bool _hideBalance = false;
   double _netBalance = 0.0;
   double _totalIncome = 0.0;
   double _totalExpense = 0.0;
@@ -126,22 +125,8 @@ class _OverviewPageState extends State<OverviewPage>
     super.dispose();
   }
 
-  Future<void> _showNotificationCenter() async {
-    final userId = await UserSession.getUserId();
-    if (!mounted) return;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _NotificationCenterSheet(userId: userId),
-    );
-  }
-
   Future<void> _fetchDashboardData({bool silent = false}) async {
     final userId = await UserSession.getUserId();
-    final name = await UserSession.getUserName();
-    _userName = name;
 
     // 1. โหลดข้อมูลจาก Cache ทันทีเพื่อให้แสดงผลได้ทันทีโดยไม่ต้องรอ API (Stale-While-Revalidate)
     if (!silent) {
@@ -426,13 +411,6 @@ class _OverviewPageState extends State<OverviewPage>
     return '${pad(d.inHours)}:${pad(d.inMinutes.remainder(60))}:${pad(d.inSeconds.remainder(60))}';
   }
 
-  String _greeting() {
-    final hour = DateTime.now().hour;
-    if (hour < 12) return 'สวัสดีตอนเช้า';
-    if (hour < 17) return 'สวัสดีตอนบ่าย';
-    return 'สวัสดีตอนเย็น';
-  }
-
   @override
   Widget build(BuildContext context) {
     final c = context.c;
@@ -462,556 +440,1135 @@ class _OverviewPageState extends State<OverviewPage>
             const SizedBox(height: 16),
             const SkeletonCard(height: 100, borderRadius: 20),
           ] else ...[
-            // Hero Balance Card
+            // 1. ZONE 1: Live Focus Spotlight
+            _buildLiveFocusSpotlight(c),
+            const SizedBox(height: 16),
+
+            // 2. ZONE 2: Today's Bento Grid
+            _buildDigitalWalletBento(c),
+            const SizedBox(height: 12),
+
+            Row(
+              children: [
+                Expanded(child: _buildTodoBento(c)),
+                const SizedBox(width: 12),
+                Expanded(child: _buildUrgentTasksBento(c)),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // 3. ZONE 3: Today's Timeline (Classes & Schedule)
+            _buildTodayClassesSection(c),
+            const SizedBox(height: 16),
+
+            // 4. ZONE 4: Next Scheduled Activity
+            _buildNextActivityCard(c),
+            const SizedBox(height: 16),
+
+            // 5. ZONE 5: Financial Insights & Breakdown Chart
+            _buildBreakdownSection(c),
+            const SizedBox(height: 16),
+
+            // 6. ZONE 6: Recurring Expenses Section
+            _buildRecurringExpensesSection(c),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// คำนวณ progress สำหรับกิจกรรมที่กำลังดำเนินการ (หลอดลดลงตามเวลาที่เหลือ)
+  double? _calculateOngoingProgress(dynamic act) {
+    if (act == null) return null;
+    final startStr = act['startTime']?.toString();
+    final endStr = act['endTime']?.toString();
+    if (startStr == null || endStr == null) return null;
+    final start = DateTime.tryParse(startStr)?.toLocal();
+    final end = DateTime.tryParse(endStr)?.toLocal();
+    if (start == null || end == null || !end.isAfter(start)) return null;
+
+    final totalSec = end.difference(start).inSeconds;
+    if (totalSec <= 0) return null;
+    final now = DateTime.now();
+    final remSec = end.difference(now).inSeconds;
+    return (remSec / totalSec).clamp(0.0, 1.0);
+  }
+
+  /// คำนวณ progress สำหรับกิจกรรมถัดไป (หลอดเพิ่มขึ้นในรอบ 30 วัน ถ้ายังไม่ถึง 30 วัน ไม่ต้องขึ้น)
+  double? _calculateNextActivityProgress(dynamic act, Duration remaining) {
+    if (act == null) return null;
+    final remSec = remaining.inSeconds;
+    const thirtyDaysInSeconds = 30 * 24 * 3600; // 2,592,000 วินาที
+
+    if (remSec > thirtyDaysInSeconds) return null;
+    if (remSec <= 0) return 1.0;
+
+    return (1.0 - (remSec / thirtyDaysInSeconds)).clamp(0.0, 1.0);
+  }
+
+  Widget _buildLiveFocusSpotlight(AppColors c) {
+    final currentList = (_todayClasses?['currentList'] as List?) ?? [];
+    final hasOngoingClass = currentList.isNotEmpty;
+    final hasOngoingActivity =
+        _activityTimeline != null &&
+        _activityTimeline!['current'] != null &&
+        _activityTimeline!['current']['title'] != null;
+    final nextList = (_todayClasses?['nextList'] as List?) ?? [];
+    final hasNextClass = nextList.isNotEmpty;
+    final hasNextActivity =
+        _activityTimeline != null &&
+        _activityTimeline!['next'] != null &&
+        _activityTimeline!['next']['title'] != null;
+
+    if (hasOngoingClass) {
+      final cls = currentList.first;
+      final courseName = cls['courseName']?.toString() ?? 'วิชาเรียน';
+      final room = cls['room']?.toString() ?? '';
+      final timeRange = '${cls['startTime']} - ${cls['endTime']}';
+      final remainingStr = _currentClassRemaining.inSeconds > 0
+          ? _formatCountdown(_currentClassRemaining)
+          : null;
+
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF059669), Color(0xFF10B981)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF10B981).withValues(alpha: 0.35),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
             Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(22),
+              width: 48,
+              height: 48,
               decoration: BoxDecoration(
-                gradient: c.heroGradient,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                    color: c.accent.withValues(alpha: 0.35),
-                    blurRadius: 20,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
+                color: Colors.white.withValues(alpha: 0.2),
+                shape: BoxShape.circle,
               ),
+              child: const Icon(
+                Icons.school_rounded,
+                color: Colors.white,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Expanded(
-                        child: Text(
-                          '${_greeting()}, $_userName',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.9),
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          overflow: TextOverflow.ellipsis,
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white,
                         ),
                       ),
-                      Row(
-                        children: [
-                          IconButton(
-                            icon: const Icon(
-                              Icons.notifications_outlined,
-                              color: Colors.white,
-                            ),
-                            tooltip: 'การแจ้งเตือนจากระบบ',
-                            onPressed: _showNotificationCenter,
-                          ),
-                          IconButton(
-                            icon: const Icon(
-                              Icons.settings_outlined,
-                              color: Colors.white,
-                            ),
-                            tooltip: 'ตั้งค่าโปรไฟล์ & การเชื่อมต่อ',
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => ProfilePage(
-                                    onProfileUpdated: () =>
-                                        _fetchDashboardData(silent: true),
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        ],
+                      const SizedBox(width: 6),
+                      Text(
+                        'กำลังเรียนอยู่ (LIVE)',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white.withValues(alpha: 0.95),
+                          letterSpacing: 0.5,
+                        ),
                       ),
+                      if (remainingStr != null) ...[
+                        const Spacer(),
+                        Text(
+                          'เหลือ $remainingStr',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
                     ],
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    'ยอดเงินคงเหลือ',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.8),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '฿${_netBalance.toStringAsFixed(2)}',
+                    courseName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 36,
+                      fontSize: 16.5,
                       fontWeight: FontWeight.w900,
-                      letterSpacing: -1,
+                      color: Colors.white,
+                      letterSpacing: -0.3,
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  Row(
+                  const SizedBox(height: 2),
+                  Text(
+                    [timeRange, if (room.isNotEmpty) 'ห้อง $room'].join(' • '),
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.white.withValues(alpha: 0.85),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (hasOngoingActivity) {
+      final act = _activityTimeline!['current'];
+      final actTitle = act['title']?.toString() ?? 'กิจกรรม';
+      final location = act['location']?.toString() ?? '';
+      final ongoingProgress = _calculateOngoingProgress(act);
+
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF2563EB), Color(0xFF3B82F6)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF3B82F6).withValues(alpha: 0.35),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.play_circle_fill_rounded,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _heroStat(
-                        'รายรับ',
-                        '+฿${_totalIncome.toStringAsFixed(0)}',
-                        Icons.arrow_upward_rounded,
+                      Row(
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Color(0xFF4ADE80),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'กำลังดำเนินการ (ONGOING)',
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white.withValues(alpha: 0.95),
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 16),
-                      _heroStat(
-                        'รายจ่าย',
-                        '-฿${_totalExpense.toStringAsFixed(0)}',
-                        Icons.arrow_downward_rounded,
+                      const SizedBox(height: 4),
+                      Text(
+                        actTitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 16.5,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.white,
+                          letterSpacing: -0.3,
+                        ),
                       ),
+                      if (location.isNotEmpty)
+                        Text(
+                          'สถานที่: $location',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.white.withValues(alpha: 0.85),
+                          ),
+                        ),
                     ],
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // Quick Stats Row
-            Row(
-              children: [
-                Expanded(
-                  child: _quickStat(
-                    c.accent,
-                    Icons.school_rounded,
-                    'วิชาเรียน',
-                    _todayClasses?['current']?['courseName'] ?? '-',
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _quickStat(
-                    c.violet,
-                    Icons.timer_rounded,
-                    'ถัดไป',
-                    _formatTimer(_nextEventCountdown),
-                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _quickStat(
-                    c.good,
-                    Icons.check_circle_rounded,
-                    'Todolist',
-                    '${((_todoDaily?['percentage'] as num?) ?? 0).toStringAsFixed(0)}%',
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _quickStat(
-                    c.coral,
-                    Icons.priority_high_rounded,
-                    'งานด่วน',
-                    '${_urgentTasks.length} รายการ',
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-
-            // Income vs Expense breakdown chart
-            _buildBreakdownSection(c),
-            const SizedBox(height: 16),
-
-            // Recurring Expenses Section
-            _buildRecurringExpensesSection(c),
-            const SizedBox(height: 16),
-
-            // Today's Classes
-            SectionCard(
-              title: 'วิชาเรียนวันนี้',
-              caption:
-                  (_todayClasses?['termName'] != null &&
-                      _todayClasses!['termName'].toString().isNotEmpty)
-                  ? (_todayClasses!['termName'].toString().startsWith(
-                          'ภาคเรียน',
-                        )
-                        ? '${_todayClasses!['termName']}'
-                        : 'ภาคเรียน: ${_todayClasses!['termName']}')
-                  : 'อัพเดทล่าสุด',
-              child: Column(
+            if (ongoingProgress != null) ...[
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _classStatusTile(
-                    'ก่อนหน้า',
-                    _todayClasses?['previous']?['courseName'] ??
-                        'ไม่มีวิชาก่อนหน้า',
-                    _todayClasses?['previous'] != null
-                        ? '${_todayClasses!['previous']['startTime']} - ${_todayClasses!['previous']['endTime']}'
-                        : '-',
-                    c.ink3,
-                  ),
-
-                  // Current classes — could be multiple (overlapping)
-                  ...() {
-                    final currentList =
-                        (_todayClasses?['currentList'] as List?) ?? [];
-                    if (currentList.isEmpty) {
-                      return [
-                        _classStatusTile(
-                          'กำลังเรียน',
-                          'ไม่มีวิชาที่กำลังเรียน',
-                          '-',
-                          c.accent,
-                          isHighlight: false,
-                        ),
-                      ];
-                    }
-                    return currentList.asMap().entries.map((entry) {
-                      final idx = entry.key;
-                      final cls = entry.value;
-                      final label = currentList.length > 1
-                          ? 'กำลังเรียน ${idx + 1}'
-                          : 'กำลังเรียน';
-                      return _classStatusTile(
-                        label,
-                        cls['courseName'] ?? '',
-                        '${cls['startTime']} - ${cls['endTime']}',
-                        c.accent,
-                        key: ValueKey(
-                          'overview-current-${cls['id'] ?? cls['courseId'] ?? cls['courseName'] ?? idx}-${cls['startTime']}',
-                        ),
-                        isHighlight: true,
-                        shouldBlink: true,
-                        countdown: idx == 0 ? _currentClassRemaining : null,
-                        countdownLabel: 'เหลือ',
-                      );
-                    }).toList();
-                  }(),
-
-                  // Next classes — could be multiple (same start time)
-                  ...() {
-                    final nextList =
-                        (_todayClasses?['nextList'] as List?) ?? [];
-                    if (nextList.isEmpty) {
-                      return [
-                        _classStatusTile(
-                          'ถัดไป',
-                          'ไม่มีวิชาถัดไป',
-                          '-',
-                          c.blue,
-                        ),
-                      ];
-                    }
-                    final shouldBlinkNext =
-                        ((_todayClasses?['currentList'] as List?) ?? [])
-                            .isEmpty;
-                    return nextList.asMap().entries.map((entry) {
-                      final idx = entry.key;
-                      final cls = entry.value;
-                      final label = nextList.length > 1
-                          ? 'ถัดไป ${idx + 1}'
-                          : 'ถัดไป';
-                      return _classStatusTile(
-                        label,
-                        cls['courseName'] ?? '',
-                        '${cls['startTime']} - ${cls['endTime']}',
-                        c.blue,
-                        key: ValueKey(
-                          'overview-next-${cls['id'] ?? cls['courseId'] ?? cls['courseName'] ?? idx}-${cls['startTime']}',
-                        ),
-                        shouldBlink: shouldBlinkNext,
-                        countdown: idx == 0 ? _nextClassCountdown : null,
-                        countdownLabel: 'อีก',
-                      );
-                    }).toList();
-                  }(),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Next Activity + Countdown
-            SectionCard(
-              title: 'กิจกรรมถัดไป',
-              gradient: c.accentGradient,
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Column(
-                      children: [
-                        Text(
-                          _formatTimer(_nextEventCountdown),
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.white,
-                            letterSpacing: 1,
-                          ),
-                        ),
-                        Text(
-                          'นับถอยหลัง',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.white.withValues(alpha: 0.8),
-                          ),
-                        ),
-                      ],
+                  Text(
+                    'เวลาที่เหลือ (กำลังลดลง)',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white.withValues(alpha: 0.85),
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _activityTimeline?['next']?['title'] ??
-                              'ไม่มีกิจกรรมถัดไป',
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _activityTimeline?['next']?['location'] != null
-                              ? _activityTimeline!['next']['location']
-                              : 'ไม่มีข้อมูลสถานที่',
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            color: Colors.white.withValues(alpha: 0.8),
-                          ),
-                        ),
-                      ],
+                  Text(
+                    '${(ongoingProgress * 100).toStringAsFixed(0)}%',
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.white,
                     ),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 16),
-
-            // Todolist Progress
-            SectionCard(
-              title: 'Todolist วันนี้',
-              caption:
-                  'เสร็จสิ้น ${((_todoDaily?['percentage'] as num?) ?? 0).toStringAsFixed(0)}%',
-              child: Column(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(20),
-                    child: LinearProgressIndicator(
-                      value:
-                          (((_todoDaily?['percentage'] as num?) ?? 0) / 100.0)
-                              .clamp(0.0, 1.0),
-                      backgroundColor: c.surface2,
-                      valueColor: AlwaysStoppedAnimation(c.accent),
-                      minHeight: 10,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  if (_todoDaily?['todos'] != null &&
-                      (_todoDaily!['todos'] as List).isNotEmpty)
-                    for (var t in (_todoDaily!['todos'] as List).take(3))
-                      Container(
-                        margin: const EdgeInsets.only(bottom: 6),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: t['isCompleted'] == true
-                              ? c.good.withValues(alpha: 0.08)
-                              : c.surface2,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              t['isCompleted'] == true
-                                  ? Icons.check_circle_rounded
-                                  : Icons.radio_button_unchecked,
-                              color: t['isCompleted'] == true ? c.good : c.ink3,
-                              size: 22,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                t['title'] ?? '',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  decoration: t['isCompleted'] == true
-                                      ? TextDecoration.lineThrough
-                                      : null,
-                                  color: t['isCompleted'] == true
-                                      ? c.ink3
-                                      : c.ink,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                  else
-                    Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Text(
-                        'ไม่มีรายการวันนี้',
-                        style: TextStyle(color: c.ink3, fontSize: 13),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Urgent Tasks
-            if (_urgentTasks.isNotEmpty)
-              SectionCard(
-                title: 'งานเร่งด่วน',
-                gradient: c.dangerGradient,
-                child: Column(
-                  children: [
-                    for (var task in _urgentTasks.take(2))
-                      Container(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 36,
-                              height: 36,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.2),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: const Icon(
-                                Icons.warning_rounded,
-                                color: Colors.white,
-                                size: 20,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    task['title'] ?? '',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                  Text(
-                                    'กำหนดส่ง: ${task['deadline'] ?? '-'}',
-                                    style: TextStyle(
-                                      color: Colors.white.withValues(
-                                        alpha: 0.8,
-                                      ),
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
+              const SizedBox(height: 5),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: LinearProgressIndicator(
+                  value: ongoingProgress,
+                  backgroundColor: Colors.white.withValues(alpha: 0.22),
+                  valueColor: const AlwaysStoppedAnimation(Color(0xFF60A5FA)),
+                  minHeight: 6,
                 ),
               ),
+            ],
           ],
-        ],
-      ),
-    );
-  }
+        ),
+      );
+    }
 
-  Widget _heroStat(String label, String value, IconData icon) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+    if (hasNextClass) {
+      final cls = nextList.first;
+      final courseName = cls['courseName']?.toString() ?? 'วิชาถัดไป';
+      final room = cls['room']?.toString() ?? '';
+      final timeRange = '${cls['startTime']} - ${cls['endTime']}';
+      final countdownStr = _nextClassCountdown.inSeconds > 0
+          ? _formatCountdown(_nextClassCountdown)
+          : null;
+
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(14),
+          gradient: c.heroGradient,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: c.accent.withValues(alpha: 0.3),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
         child: Row(
           children: [
-            Icon(icon, color: Colors.white, size: 16),
-            const SizedBox(width: 6),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.18),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Icon(
+                Icons.timer_rounded,
+                color: Colors.white,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        'วิชาเรียนถัดไป',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white.withValues(alpha: 0.9),
+                        ),
+                      ),
+                      if (countdownStr != null) ...[
+                        const Spacer(),
+                        Text(
+                          'อีก $countdownStr',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    courseName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 15.5,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
+                  ),
+                  Text(
+                    [timeRange, if (room.isNotEmpty) 'ห้อง $room'].join(' • '),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.white.withValues(alpha: 0.8),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (hasNextActivity) {
+      final act = _activityTimeline!['next'];
+      final nextProgress = _calculateNextActivityProgress(
+        act,
+        _nextEventCountdown,
+      );
+
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          gradient: c.accentGradient,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: c.accent.withValues(alpha: 0.3),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            Row(
               children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.8),
-                    fontSize: 11,
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        _formatTimer(_nextEventCountdown),
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.white,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                      Text(
+                        'นับถอยหลัง',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          color: Colors.white.withValues(alpha: 0.8),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        act['title']?.toString() ?? 'กิจกรรมถัดไป',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        act['location'] != null &&
+                                act['location'].toString().isNotEmpty
+                            ? act['location'].toString()
+                            : 'กำหนดการที่กำลังจะมาถึง',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.white.withValues(alpha: 0.8),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
+            if (nextProgress != null) ...[
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'นับถอยหลังรอบ 30 วัน',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white.withValues(alpha: 0.85),
+                    ),
+                  ),
+                  Text(
+                    '${(nextProgress * 100).toStringAsFixed(0)}%',
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 5),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: LinearProgressIndicator(
+                  value: nextProgress,
+                  backgroundColor: Colors.white.withValues(alpha: 0.22),
+                  valueColor: const AlwaysStoppedAnimation(Color(0xFF4ADE80)),
+                  minHeight: 6,
+                ),
+              ),
+            ],
           ],
         ),
+      );
+    }
+
+    return const SizedBox.shrink();
+  }
+
+  Widget _buildDigitalWalletBento(AppColors c) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        gradient: c.walletGradient,
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.16),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: c.accent.withValues(alpha: 0.28),
+            blurRadius: 28,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.2),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.account_balance_wallet_rounded,
+                      size: 14,
+                      color: Colors.white,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'กระเป๋าหลัก',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.95),
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              GestureDetector(
+                onTap: () => setState(() => _hideBalance = !_hideBalance),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _hideBalance
+                            ? Icons.visibility_off_rounded
+                            : Icons.visibility_rounded,
+                        size: 14,
+                        color: Colors.white.withValues(alpha: 0.9),
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        _hideBalance ? 'แสดง' : 'ซ่อน',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.85),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Text(
+            'ยอดเงินคงเหลือ',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.75),
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            _hideBalance
+                ? '฿ • • • • • •'
+                : '฿${_netBalance.toStringAsFixed(2)}',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 34,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -0.8,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              _heroStat(
+                'รายรับ',
+                _hideBalance ? '฿ •••' : '+฿${_totalIncome.toStringAsFixed(0)}',
+                Icons.arrow_downward_rounded,
+                c.good,
+              ),
+              const SizedBox(width: 12),
+              _heroStat(
+                'รายจ่าย',
+                _hideBalance
+                    ? '฿ •••'
+                    : '-฿${_totalExpense.toStringAsFixed(0)}',
+                Icons.arrow_upward_rounded,
+                c.coral,
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 
-  Widget _quickStat(Color color, IconData icon, String label, String value) {
-    final c = context.c;
+  Widget _buildTodoBento(AppColors c) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final pct = ((_todoDaily?['percentage'] as num?) ?? 0).toDouble();
+    final todos = (_todoDaily?['todos'] as List?) ?? [];
+    final completedCount = todos.where((t) => t['isCompleted'] == true).length;
+    final totalCount = todos.length;
+
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: c.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: c.border.withValues(alpha: 0.5)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: color, size: 20),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: isDark
+              ? c.border.withValues(alpha: 0.8)
+              : c.border.withValues(alpha: 0.6),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isDark
+                ? Colors.black.withValues(alpha: 0.25)
+                : c.ink.withValues(alpha: 0.035),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: c.good.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.check_circle_rounded,
+                  color: c.good,
+                  size: 20,
+                ),
+              ),
+              Text(
+                '${pct.toStringAsFixed(0)}%',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                  color: c.good,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            'Todolist วันนี้',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              color: c.ink,
+              letterSpacing: -0.2,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            totalCount > 0
+                ? 'เสร็จ $completedCount จาก $totalCount งาน'
+                : 'ไม่มีงานค้าง',
+            style: TextStyle(
+              fontSize: 12,
+              color: c.ink3,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: LinearProgressIndicator(
+              value: (pct / 100.0).clamp(0.0, 1.0),
+              backgroundColor: c.surface2,
+              valueColor: AlwaysStoppedAnimation(c.good),
+              minHeight: 6,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUrgentTasksBento(AppColors c) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final urgentCount = _urgentTasks.length;
+    final firstTask = urgentCount > 0 ? _urgentTasks.first : null;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: isDark
+              ? c.border.withValues(alpha: 0.8)
+              : c.border.withValues(alpha: 0.6),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isDark
+                ? Colors.black.withValues(alpha: 0.25)
+                : c.ink.withValues(alpha: 0.035),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: c.coral.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.priority_high_rounded,
+                  color: c.coral,
+                  size: 20,
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: c.coralSoft,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '$urgentCount รายการ',
                   style: TextStyle(
                     fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    color: c.ink3,
+                    fontWeight: FontWeight.w800,
+                    color: c.coral,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            'งานเร่งด่วน',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              color: c.ink,
+              letterSpacing: -0.2,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            firstTask != null
+                ? (firstTask['title'] ?? 'งานที่ต้องส่ง')
+                : 'ไม่มีงานด่วน',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 12,
+              color: c.ink3,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: LinearProgressIndicator(
+              value: urgentCount > 0 ? 1.0 : 0.0,
+              backgroundColor: c.surface2,
+              valueColor: AlwaysStoppedAnimation(
+                urgentCount > 0 ? c.coral : c.good,
+              ),
+              minHeight: 6,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTodayClassesSection(AppColors c) {
+    return SectionCard(
+      title: 'วิชาเรียนวันนี้',
+      caption:
+          (_todayClasses?['termName'] != null &&
+              _todayClasses!['termName'].toString().isNotEmpty)
+          ? (_todayClasses!['termName'].toString().startsWith('ภาคเรียน')
+                ? '${_todayClasses!['termName']}'
+                : 'ภาคเรียน: ${_todayClasses!['termName']}')
+          : 'ตารางเรียนประจำวัน',
+      icon: Icons.calendar_today_rounded,
+      child: Column(
+        children: [
+          _classStatusTile(
+            'ก่อนหน้า',
+            _todayClasses?['previous']?['courseName'] ?? 'ไม่มีวิชาก่อนหน้า',
+            _todayClasses?['previous'] != null
+                ? '${_todayClasses!['previous']['startTime']} - ${_todayClasses!['previous']['endTime']}'
+                : '-',
+            c.ink3,
+          ),
+
+          // Current classes — could be multiple (overlapping)
+          ...() {
+            final currentList = (_todayClasses?['currentList'] as List?) ?? [];
+            if (currentList.isEmpty) {
+              return [
+                _classStatusTile(
+                  'กำลังเรียน',
+                  'ไม่มีวิชาที่กำลังเรียน',
+                  '-',
+                  c.accent,
+                  isHighlight: false,
+                ),
+              ];
+            }
+            return currentList.asMap().entries.map((entry) {
+              final idx = entry.key;
+              final cls = entry.value;
+              final label = currentList.length > 1
+                  ? 'กำลังเรียน ${idx + 1}'
+                  : 'กำลังเรียน';
+              return _classStatusTile(
+                label,
+                cls['courseName'] ?? '',
+                '${cls['startTime']} - ${cls['endTime']}',
+                c.accent,
+                key: ValueKey(
+                  'overview-current-${cls['id'] ?? cls['courseId'] ?? cls['courseName'] ?? idx}-${cls['startTime']}',
+                ),
+                isHighlight: true,
+                shouldBlink: true,
+                countdown: idx == 0 ? _currentClassRemaining : null,
+                countdownLabel: 'เหลือ',
+              );
+            }).toList();
+          }(),
+
+          // Next classes — could be multiple (same start time)
+          ...() {
+            final nextList = (_todayClasses?['nextList'] as List?) ?? [];
+            if (nextList.isEmpty) {
+              return [_classStatusTile('ถัดไป', 'ไม่มีวิชาถัดไป', '-', c.blue)];
+            }
+            final shouldBlinkNext =
+                ((_todayClasses?['currentList'] as List?) ?? []).isEmpty;
+            return nextList.asMap().entries.map((entry) {
+              final idx = entry.key;
+              final cls = entry.value;
+              final label = nextList.length > 1 ? 'ถัดไป ${idx + 1}' : 'ถัดไป';
+              return _classStatusTile(
+                label,
+                cls['courseName'] ?? '',
+                '${cls['startTime']} - ${cls['endTime']}',
+                c.blue,
+                key: ValueKey(
+                  'overview-next-${cls['id'] ?? cls['courseId'] ?? cls['courseName'] ?? idx}-${cls['startTime']}',
+                ),
+                shouldBlink: shouldBlinkNext,
+                countdown: idx == 0 ? _nextClassCountdown : null,
+                countdownLabel: 'อีก',
+              );
+            }).toList();
+          }(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNextActivityCard(AppColors c) {
+    if (_activityTimeline?['next'] == null) return const SizedBox.shrink();
+    final next = _activityTimeline!['next'];
+    final nextProgress = _calculateNextActivityProgress(
+      next,
+      _nextEventCountdown,
+    );
+
+    return SectionCard(
+      title: 'กิจกรรมถัดไป',
+      caption: 'นัดหมายสำคัญ',
+      icon: Icons.celebration_rounded,
+      gradient: c.accentGradient,
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      _formatTimer(_nextEventCountdown),
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                    Text(
+                      'นับถอยหลัง',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.white.withValues(alpha: 0.85),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      next['title']?.toString() ?? 'กิจกรรม',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      next['location'] != null &&
+                              next['location'].toString().isNotEmpty
+                          ? next['location'].toString()
+                          : 'ไม่มีข้อมูลสถานที่',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: Colors.white.withValues(alpha: 0.85),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (nextProgress != null) ...[
+            const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'นับถอยหลังรอบ 30 วัน',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white.withValues(alpha: 0.85),
                   ),
                 ),
                 Text(
-                  value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: c.ink,
+                  '${(nextProgress * 100).toStringAsFixed(0)}%',
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.white,
                   ),
                 ),
               ],
             ),
-          ),
+            const SizedBox(height: 5),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: LinearProgressIndicator(
+                value: nextProgress,
+                backgroundColor: Colors.white.withValues(alpha: 0.22),
+                valueColor: const AlwaysStoppedAnimation(Color(0xFF4ADE80)),
+                minHeight: 6,
+              ),
+            ),
+          ],
         ],
+      ),
+    );
+  }
+
+  Widget _heroStat(
+    String label,
+    String value,
+    IconData icon, [
+    Color? iconColor,
+  ]) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: (iconColor ?? Colors.white).withValues(alpha: 0.22),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: Colors.white, size: 16),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.8),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

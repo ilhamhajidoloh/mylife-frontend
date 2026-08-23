@@ -260,7 +260,7 @@ class _FinancePageState extends State<FinancePage> {
     return str == 'income' || str == '0';
   }
 
-  void _openTransactionModal([dynamic item]) {
+  void _openTransactionModal([dynamic item, bool? initialIsIncome]) {
     final isEdit = item != null;
     final categoryController = TextEditingController(
       text: item?['category'] ?? '',
@@ -269,7 +269,9 @@ class _FinancePageState extends State<FinancePage> {
     final amountController = TextEditingController(
       text: item?['amount'] != null ? (item!['amount'] as num).toString() : '',
     );
-    bool isIncome = isEdit ? _isIncomeType(item?['type']) : false;
+    bool isIncome = isEdit
+        ? _isIncomeType(item?['type'])
+        : (initialIsIncome ?? false);
 
     showAppBottomSheet(
       context,
@@ -1442,6 +1444,117 @@ class _FinancePageState extends State<FinancePage> {
                 ],
               ),
               const SizedBox(height: 12),
+
+              // Quick Action Bar
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => _openTransactionModal(null, true),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 11),
+                        decoration: BoxDecoration(
+                          color: c.good.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: c.good.withValues(alpha: 0.25),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.arrow_downward_rounded,
+                              size: 16,
+                              color: c.good,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              '+ รายรับ',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                color: c.good,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => _openTransactionModal(null, false),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 11),
+                        decoration: BoxDecoration(
+                          color: c.coralSoft,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: c.coral.withValues(alpha: 0.25),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.arrow_upward_rounded,
+                              size: 16,
+                              color: c.coral,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              '- รายจ่าย',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                color: c.coral,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => _openRecurringModal(),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 11),
+                        decoration: BoxDecoration(
+                          color: c.accentSoft,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: c.accent.withValues(alpha: 0.25),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.repeat_rounded,
+                              size: 16,
+                              color: c.accent,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'บิลประจำ',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                color: c.accent,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
               // Net balance card
               SectionCard(
                 title: 'เงินคงเหลือ',
@@ -2288,7 +2401,7 @@ class _SummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         gradient:
@@ -2298,45 +2411,49 @@ class _SummaryCard extends StatelessWidget {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.18),
+          width: 1,
+        ),
         boxShadow: [
           BoxShadow(
-            color: glowColor.withValues(alpha: 0.25),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+            color: glowColor.withValues(alpha: 0.28),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
       child: Stack(
         children: [
           Positioned(
-            right: -14,
-            bottom: -14,
+            right: -12,
+            bottom: -12,
             child: Icon(
               icon,
-              size: 74,
-              color: Colors.white.withValues(alpha: 0.14),
+              size: 78,
+              color: Colors.white.withValues(alpha: 0.12),
             ),
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 30,
-                height: 30,
+                width: 34,
+                height: 34,
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(9),
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(icon, color: Colors.white, size: 16),
+                child: Icon(icon, color: Colors.white, size: 18),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
               Text(
                 label,
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.9),
+                  color: Colors.white.withValues(alpha: 0.85),
                   fontSize: 13,
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 4),
@@ -2346,6 +2463,7 @@ class _SummaryCard extends StatelessWidget {
                   color: Colors.white,
                   fontSize: 22,
                   fontWeight: FontWeight.w900,
+                  letterSpacing: -0.5,
                 ),
               ),
             ],
