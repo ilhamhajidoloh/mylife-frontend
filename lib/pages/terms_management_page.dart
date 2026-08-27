@@ -216,6 +216,7 @@ class _TermsManagementPageState extends State<TermsManagementPage> {
               ],
             ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'fab_terms',
         onPressed: () => _openTermForm(),
         backgroundColor: c.accent,
         icon: const Icon(Icons.add, color: Colors.white),

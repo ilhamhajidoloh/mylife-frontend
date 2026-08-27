@@ -1,3 +1,4 @@
+import 'dart:io';
 import '../config/api_config.dart';
 import 'api_client.dart';
 
@@ -40,16 +41,25 @@ class AuthApiService {
   }
 
   static Future<dynamic> updateProfile(String fullName) async {
-    return await ApiClient.put(ApiConfig.authProfile, {
-      'fullName': fullName,
-    });
+    return await ApiClient.put(ApiConfig.authProfile, {'fullName': fullName});
   }
 
-  static Future<dynamic> changePassword(String currentPassword, String newPassword) async {
+  static Future<dynamic> changePassword(
+    String currentPassword,
+    String newPassword,
+  ) async {
     return await ApiClient.put(ApiConfig.authPassword, {
       'currentPassword': currentPassword,
       'newPassword': newPassword,
     });
+  }
+
+  static Future<dynamic> uploadProfileImage(
+    String userId,
+    File imageFile,
+  ) async {
+    final url = '${ApiConfig.authProfileImage}/$userId';
+    return await ApiClient.uploadFile(url, imageFile.path, 'image');
   }
 }
 
@@ -209,7 +219,9 @@ class ScheduleApiService {
   }
 
   static Future<dynamic> deleteTerm(String id) async {
-    return await ApiClient.delete('${ApiConfig.baseUrl}/api/schedule/terms/$id');
+    return await ApiClient.delete(
+      '${ApiConfig.baseUrl}/api/schedule/terms/$id',
+    );
   }
 
   static Future<dynamic> addCourse(
@@ -436,7 +448,11 @@ class TodoApiService {
 
   /// ติ๊กสำเร็จ/ยกเลิก — ใช้ endpoint นี้แทน updateTodo เพราะรองรับ todo แบบทำซ้ำ
   /// (แต่ละวันที่เกิดซ้ำมีสถานะสำเร็จแยกกัน ผ่านตาราง TodoCompletions)
-  static Future<dynamic> updateCompletion(String id, bool isCompleted, DateTime date) async {
+  static Future<dynamic> updateCompletion(
+    String id,
+    bool isCompleted,
+    DateTime date,
+  ) async {
     return await ApiClient.put('${ApiConfig.baseUrl}/api/todo/$id/completion', {
       'isCompleted': isCompleted,
       'date': date.toIso8601String(),
@@ -517,7 +533,11 @@ class GoogleCalendarApiService {
     return await ApiClient.get(ApiConfig.googleCalendar(userId));
   }
 
-  static Future<dynamic> connectWithAuthCode(String userId, String code, String redirectUri) async {
+  static Future<dynamic> connectWithAuthCode(
+    String userId,
+    String code,
+    String redirectUri,
+  ) async {
     return await ApiClient.post(ApiConfig.googleCalendarConnect(userId), {
       'code': code,
       'redirectUri': redirectUri,
@@ -547,7 +567,11 @@ class LineApiService {
     return await ApiClient.get(ApiConfig.lineConnection(userId));
   }
 
-  static Future<dynamic> connect(String userId, String lineUserId, {bool notificationsEnabled = true}) async {
+  static Future<dynamic> connect(
+    String userId,
+    String lineUserId, {
+    bool notificationsEnabled = true,
+  }) async {
     return await ApiClient.post(ApiConfig.lineConnect(userId), {
       'lineUserId': lineUserId,
       'notificationsEnabled': notificationsEnabled,

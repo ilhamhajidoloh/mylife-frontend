@@ -6,7 +6,8 @@ class ApiConfig {
   static const String _envBaseUrl = String.fromEnvironment('API_BASE_URL');
 
   // URL ของ Render Cloud Server
-  static const String _renderUrl = 'https://mylife-backend-w9yp.onrender.com';
+  static const String _renderUrl =
+      'https://mylife-backend-1015105923446.asia-southeast1.run.app';
 
   static String get baseUrl {
     // 1. ถ้ามีการระบุ API_BASE_URL ตอน build ให้ใช้ค่านั้นทันที
@@ -26,11 +27,14 @@ class ApiConfig {
 
     // 4. ถ้าเป็น Android / iOS (Debug Mode)
     if (Platform.isAndroid || Platform.isIOS) {
-      const bool isEmulator = bool.fromEnvironment('IS_EMULATOR', defaultValue: false);
+      const bool isEmulator = bool.fromEnvironment(
+        'IS_EMULATOR',
+        defaultValue: false,
+      );
       if (isEmulator) {
         return 'http://10.0.2.2:5147'; // Localhost สำหรับ Android Emulator
       }
-      
+
       // ถ้าเป็นโทรศัพท์จริงใน Debug Mode ให้ดึงข้อมูลจาก Render Cloud Server
       return _renderUrl;
     }
@@ -46,13 +50,24 @@ class ApiConfig {
   static String get authMe => '$baseUrl/api/auth/me';
   static String get authProfile => '$baseUrl/api/auth/profile';
   static String get authPassword => '$baseUrl/api/auth/password';
+  static String get authProfileImage => '$baseUrl/api/auth/profile-image';
+  static String authProfileImageUrl(String userId) =>
+      '$baseUrl/api/auth/profile-image/$userId';
 
   static String finance(String userId) => '$baseUrl/api/finance/$userId';
-  static String financeSummary(String userId) => '$baseUrl/api/finance/summary/$userId';
-  static String financeRecurring(String userId) => '$baseUrl/api/finance/recurring/$userId';
+  static String financeSummary(String userId) =>
+      '$baseUrl/api/finance/summary/$userId';
+  static String financeRecurring(String userId) =>
+      '$baseUrl/api/finance/recurring/$userId';
   static String get financeRecurringAdd => '$baseUrl/api/finance/recurring';
-  static String financeRecurringItem(String id) => '$baseUrl/api/finance/recurring/$id';
-  static String financeBreakdown(String userId, String period, {int? year, int? month}) {
+  static String financeRecurringItem(String id) =>
+      '$baseUrl/api/finance/recurring/$id';
+  static String financeBreakdown(
+    String userId,
+    String period, {
+    int? year,
+    int? month,
+  }) {
     final params = <String, String>{'period': period};
     if (year != null) params['year'] = '$year';
     if (month != null) params['month'] = '$month';
@@ -65,31 +80,44 @@ class ApiConfig {
   static String get bookCreate => '$baseUrl/api/books';
   static String bookItem(String id) => '$baseUrl/api/books/$id';
 
-  static String scheduleTerms(String userId) => '$baseUrl/api/schedule/terms/$userId';
-  static String scheduleTodayClasses(String userId) => '$baseUrl/api/schedule/today-classes/$userId';
+  static String scheduleTerms(String userId) =>
+      '$baseUrl/api/schedule/terms/$userId';
+  static String scheduleTodayClasses(String userId) =>
+      '$baseUrl/api/schedule/today-classes/$userId';
   static String get scheduleTermCreate => '$baseUrl/api/schedule/terms';
-  static String scheduleTermItem(String id) => '$baseUrl/api/schedule/terms/$id';
-  static String scheduleByTerm(String userId, String termId) => '$baseUrl/api/schedule/$userId/term/$termId';
-  static String scheduleStats(String userId, String termId) => '$baseUrl/api/schedule/stats/$userId/$termId';
+  static String scheduleTermItem(String id) =>
+      '$baseUrl/api/schedule/terms/$id';
+  static String scheduleByTerm(String userId, String termId) =>
+      '$baseUrl/api/schedule/$userId/term/$termId';
+  static String scheduleStats(String userId, String termId) =>
+      '$baseUrl/api/schedule/stats/$userId/$termId';
 
   static String activity(String userId) => '$baseUrl/api/activity/$userId';
-  static String activityTimeline(String userId) => '$baseUrl/api/activity/timeline/$userId';
+  static String activityTimeline(String userId) =>
+      '$baseUrl/api/activity/timeline/$userId';
 
   static String todo(String userId) => '$baseUrl/api/todo/$userId';
-  static String todoDailyCompletion(String userId) => '$baseUrl/api/todo/daily-completion/$userId';
+  static String todoDailyCompletion(String userId) =>
+      '$baseUrl/api/todo/daily-completion/$userId';
 
   static String task(String userId) => '$baseUrl/api/task/$userId';
   static String taskUrgent(String userId) => '$baseUrl/api/task/urgent/$userId';
 
   static String health(String userId) => '$baseUrl/api/health/$userId';
-  static String healthChartData(String userId) => '$baseUrl/api/health/chart-data/$userId';
+  static String healthChartData(String userId) =>
+      '$baseUrl/api/health/chart-data/$userId';
 
-  static String googleCalendar(String userId) => '$baseUrl/api/googlecalendar/$userId';
-  static String googleCalendarConnect(String userId) => '$baseUrl/api/googlecalendar/$userId/connect';
+  static String googleCalendar(String userId) =>
+      '$baseUrl/api/googlecalendar/$userId';
+  static String googleCalendarConnect(String userId) =>
+      '$baseUrl/api/googlecalendar/$userId/connect';
 
   static String lineConnection(String userId) => '$baseUrl/api/line/$userId';
-  static String lineConnect(String userId) => '$baseUrl/api/line/$userId/connect';
-  static String lineDisconnect(String userId) => '$baseUrl/api/line/$userId/disconnect';
+  static String lineConnect(String userId) =>
+      '$baseUrl/api/line/$userId/connect';
+  static String lineDisconnect(String userId) =>
+      '$baseUrl/api/line/$userId/disconnect';
 
-  static String notification(String userId) => '$baseUrl/api/notification/$userId';
+  static String notification(String userId) =>
+      '$baseUrl/api/notification/$userId';
 }

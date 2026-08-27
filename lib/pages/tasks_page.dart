@@ -43,16 +43,27 @@ class _TasksPageState extends State<TasksPage> {
 
     // Filter by priority
     if (_priorityFilter == 'urgent') {
-      filtered = filtered.where((task) => task['isUrgent'] == true || task['priority'] == 'high').toList();
+      filtered = filtered
+          .where(
+            (task) => task['isUrgent'] == true || task['priority'] == 'high',
+          )
+          .toList();
     } else if (_priorityFilter == 'normal') {
-      filtered = filtered.where((task) => task['isUrgent'] != true && task['priority'] != 'high').toList();
+      filtered = filtered
+          .where(
+            (task) => task['isUrgent'] != true && task['priority'] != 'high',
+          )
+          .toList();
     }
 
     return filtered;
   }
 
-  int get _pendingCount => _tasks.where((task) => task['isCompleted'] != true).length;
-  int get _urgentCount => _tasks.where((task) => task['isUrgent'] == true || task['priority'] == 'high').length;
+  int get _pendingCount =>
+      _tasks.where((task) => task['isCompleted'] != true).length;
+  int get _urgentCount => _tasks
+      .where((task) => task['isUrgent'] == true || task['priority'] == 'high')
+      .length;
 
   Future<void> _loadTasks() async {
     final userId = await UserSession.getUserId();
@@ -61,7 +72,10 @@ class _TasksPageState extends State<TasksPage> {
     final cachedTasks = await CacheService.get(userId, CacheService.tasks);
     if (cachedTasks != null) _tasks = cachedTasks;
 
-    final cachedUrgent = await CacheService.get(userId, CacheService.taskUrgent);
+    final cachedUrgent = await CacheService.get(
+      userId,
+      CacheService.taskUrgent,
+    );
     if (cachedUrgent != null) _urgentTasks = cachedUrgent;
 
     if (cachedTasks != null || cachedUrgent != null) {
@@ -115,7 +129,8 @@ class _TasksPageState extends State<TasksPage> {
       await NotificationService.scheduleNotification(
         id: notifId,
         title: '📌 ใกล้ถึงกำหนดส่ง: ${task['title'] ?? ''}',
-        body: 'วิชา: ${(task['subject'] as String?)?.isNotEmpty == true ? task['subject'] : '-'} — ${_formatDeadline(task['deadline'])}',
+        body:
+            'วิชา: ${(task['subject'] as String?)?.isNotEmpty == true ? task['subject'] : '-'} — ${_formatDeadline(task['deadline'])}',
         scheduledDate: reminderTime,
       );
     } catch (e, st) {
@@ -126,10 +141,13 @@ class _TasksPageState extends State<TasksPage> {
   void _openTaskModal([dynamic item]) {
     final isEdit = item != null;
     final titleController = TextEditingController(text: item?['title'] ?? '');
-    final subjectController = TextEditingController(text: item?['subject'] ?? '');
+    final subjectController = TextEditingController(
+      text: item?['subject'] ?? '',
+    );
     bool isUrgent = item?['isUrgent'] == true;
     DateTime deadline = isEdit && item['deadline'] != null
-        ? (DateTime.tryParse(item['deadline']) ?? DateTime.now().add(const Duration(days: 2)))
+        ? (DateTime.tryParse(item['deadline']) ??
+              DateTime.now().add(const Duration(days: 2)))
         : DateTime.now().add(const Duration(days: 2));
 
     showAppBottomSheet(
@@ -138,14 +156,36 @@ class _TasksPageState extends State<TasksPage> {
       child: StatefulBuilder(
         builder: (context, setModalState) {
           final cc = context.c;
-          const thMonths = ['', 'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+          const thMonths = [
+            '',
+            'ม.ค.',
+            'ก.พ.',
+            'มี.ค.',
+            'เม.ย.',
+            'พ.ค.',
+            'มิ.ย.',
+            'ก.ค.',
+            'ส.ค.',
+            'ก.ย.',
+            'ต.ค.',
+            'พ.ย.',
+            'ธ.ค.',
+          ];
           return Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              AppModalField(controller: titleController, label: 'ชื่องาน / การบ้าน', icon: Icons.assignment_rounded),
+              AppModalField(
+                controller: titleController,
+                label: 'ชื่องาน / การบ้าน',
+                icon: Icons.assignment_rounded,
+              ),
               const SizedBox(height: 12),
-              AppModalField(controller: subjectController, label: 'วิชา / หมวดหมู่', icon: Icons.subject_rounded),
+              AppModalField(
+                controller: subjectController,
+                label: 'วิชา / หมวดหมู่',
+                icon: Icons.subject_rounded,
+              ),
               const SizedBox(height: 16),
               AppModalSection(
                 title: 'กำหนดส่ง',
@@ -157,7 +197,11 @@ class _TasksPageState extends State<TasksPage> {
                       firstDate: DateTime(2020),
                       lastDate: DateTime(2100),
                       builder: (ctx, child) => Theme(
-                        data: Theme.of(ctx).copyWith(colorScheme: Theme.of(ctx).colorScheme.copyWith(primary: cc.accent)),
+                        data: Theme.of(ctx).copyWith(
+                          colorScheme: Theme.of(
+                            ctx,
+                          ).colorScheme.copyWith(primary: cc.accent),
+                        ),
                         child: child!,
                       ),
                     );
@@ -166,29 +210,44 @@ class _TasksPageState extends State<TasksPage> {
                       context: context,
                       initialTime: TimeOfDay.fromDateTime(deadline),
                       builder: (ctx, child) => Theme(
-                        data: Theme.of(ctx).copyWith(colorScheme: Theme.of(ctx).colorScheme.copyWith(primary: cc.accent)),
+                        data: Theme.of(ctx).copyWith(
+                          colorScheme: Theme.of(
+                            ctx,
+                          ).colorScheme.copyWith(primary: cc.accent),
+                        ),
                         child: child!,
                       ),
                     );
-                    setModalState(() => deadline = DateTime(
-                          picked.year,
-                          picked.month,
-                          picked.day,
-                          pickedTime?.hour ?? deadline.hour,
-                          pickedTime?.minute ?? deadline.minute,
-                        ));
+                    setModalState(
+                      () => deadline = DateTime(
+                        picked.year,
+                        picked.month,
+                        picked.day,
+                        pickedTime?.hour ?? deadline.hour,
+                        pickedTime?.minute ?? deadline.minute,
+                      ),
+                    );
                   },
                   child: Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    decoration: BoxDecoration(color: cc.surface2, borderRadius: BorderRadius.circular(14)),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: cc.surface2,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                     child: Row(
                       children: [
                         Icon(Icons.event_rounded, size: 18, color: cc.accent),
                         const SizedBox(width: 10),
                         Text(
                           '${deadline.day} ${thMonths[deadline.month]} ${deadline.year + 543}  ${deadline.hour.toString().padLeft(2, '0')}:${deadline.minute.toString().padLeft(2, '0')}',
-                          style: TextStyle(fontWeight: FontWeight.w700, color: cc.ink),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: cc.ink,
+                          ),
                         ),
                       ],
                     ),
@@ -206,7 +265,9 @@ class _TasksPageState extends State<TasksPage> {
                     color: isUrgent ? cc.coralSoft : cc.surface2,
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
-                      color: isUrgent ? cc.coral.withValues(alpha: 0.4) : cc.border,
+                      color: isUrgent
+                          ? cc.coral.withValues(alpha: 0.4)
+                          : cc.border,
                     ),
                   ),
                   child: Row(
@@ -215,11 +276,15 @@ class _TasksPageState extends State<TasksPage> {
                         width: 36,
                         height: 36,
                         decoration: BoxDecoration(
-                          color: isUrgent ? cc.coral.withValues(alpha: 0.15) : cc.border.withValues(alpha: 0.3),
+                          color: isUrgent
+                              ? cc.coral.withValues(alpha: 0.15)
+                              : cc.border.withValues(alpha: 0.3),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Icon(
-                          isUrgent ? Icons.warning_rounded : Icons.flag_outlined,
+                          isUrgent
+                              ? Icons.warning_rounded
+                              : Icons.flag_outlined,
                           color: isUrgent ? cc.coral : cc.ink3,
                           size: 20,
                         ),
@@ -229,10 +294,18 @@ class _TasksPageState extends State<TasksPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('งานเร่งด่วน',
-                                style: TextStyle(fontWeight: FontWeight.w700, color: isUrgent ? cc.coral : cc.ink, fontSize: 14)),
-                            Text('กำหนดส่งเร็ว',
-                                style: TextStyle(fontSize: 12, color: cc.ink3)),
+                            Text(
+                              'งานเร่งด่วน',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color: isUrgent ? cc.coral : cc.ink,
+                                fontSize: 14,
+                              ),
+                            ),
+                            Text(
+                              'กำหนดส่งเร็ว',
+                              style: TextStyle(fontSize: 12, color: cc.ink3),
+                            ),
                           ],
                         ),
                       ),
@@ -246,7 +319,9 @@ class _TasksPageState extends State<TasksPage> {
                         ),
                         child: AnimatedAlign(
                           duration: const Duration(milliseconds: 200),
-                          alignment: isUrgent ? Alignment.centerRight : Alignment.centerLeft,
+                          alignment: isUrgent
+                              ? Alignment.centerRight
+                              : Alignment.centerLeft,
                           child: Container(
                             width: 24,
                             height: 24,
@@ -269,7 +344,9 @@ class _TasksPageState extends State<TasksPage> {
                     GestureDetector(
                       onTap: () async {
                         await TaskApiService.deleteTask(item['id']);
-                        await NotificationService.cancelNotification((item['id'].toString().hashCode).abs() % 2147483647);
+                        await NotificationService.cancelNotification(
+                          (item['id'].toString().hashCode).abs() % 2147483647,
+                        );
                         if (context.mounted) Navigator.pop(context);
                         _loadTasks();
                         DataEventService.notifyDataChanged();
@@ -280,12 +357,22 @@ class _TasksPageState extends State<TasksPage> {
                           color: cc.coralSoft,
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Icon(Icons.delete_outline_rounded, color: cc.coral, size: 20),
+                        child: Icon(
+                          Icons.delete_outline_rounded,
+                          color: cc.coral,
+                          size: 20,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 8),
                   ],
-                  Expanded(child: AppModalButton(label: 'ยกเลิก', onPressed: () => Navigator.pop(context), isPrimary: false)),
+                  Expanded(
+                    child: AppModalButton(
+                      label: 'ยกเลิก',
+                      onPressed: () => Navigator.pop(context),
+                      isPrimary: false,
+                    ),
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: AppModalButton(
@@ -296,9 +383,22 @@ class _TasksPageState extends State<TasksPage> {
                         final userId = await UserSession.getUserId();
                         dynamic saved;
                         if (isEdit) {
-                          saved = await TaskApiService.updateTask(item['id'], titleController.text, subjectController.text, isUrgent, item['isCompleted'] == true, deadline);
+                          saved = await TaskApiService.updateTask(
+                            item['id'],
+                            titleController.text,
+                            subjectController.text,
+                            isUrgent,
+                            item['isCompleted'] == true,
+                            deadline,
+                          );
                         } else {
-                          saved = await TaskApiService.addTask(userId, titleController.text, subjectController.text, isUrgent, deadline);
+                          saved = await TaskApiService.addTask(
+                            userId,
+                            titleController.text,
+                            subjectController.text,
+                            isUrgent,
+                            deadline,
+                          );
                         }
                         await _scheduleTaskDeadlineNotification(saved);
 
@@ -317,7 +417,21 @@ class _TasksPageState extends State<TasksPage> {
     );
   }
 
-  static const _thMonths = ['', 'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+  static const _thMonths = [
+    '',
+    'ม.ค.',
+    'ก.พ.',
+    'มี.ค.',
+    'เม.ย.',
+    'พ.ค.',
+    'มิ.ย.',
+    'ก.ค.',
+    'ส.ค.',
+    'ก.ย.',
+    'ต.ค.',
+    'พ.ย.',
+    'ธ.ค.',
+  ];
 
   String _formatDeadline(dynamic raw) {
     if (raw == null) return '-';
@@ -337,13 +451,21 @@ class _TasksPageState extends State<TasksPage> {
           gradient: c.accentGradient,
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
-            BoxShadow(color: c.accent.withValues(alpha: 0.35), blurRadius: 12, offset: const Offset(0, 4)),
+            BoxShadow(
+              color: c.accent.withValues(alpha: 0.35),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
           ],
         ),
         child: FloatingActionButton.extended(
+          heroTag: 'fab_tasks',
           onPressed: () => _openTaskModal(),
           icon: const Icon(Icons.add_rounded, color: Colors.white),
-          label: const Text('เพิ่มงาน', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+          label: const Text(
+            'เพิ่มงาน',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+          ),
           backgroundColor: Colors.transparent,
           elevation: 0,
         ),
@@ -355,7 +477,8 @@ class _TasksPageState extends State<TasksPage> {
           children: [
             PageHeader(
               title: 'งาน & การบ้าน',
-              subtitle: 'ค้างส่ง $_pendingCount รายการ • งานด่วน $_urgentCount รายการ',
+              subtitle:
+                  'ค้างส่ง $_pendingCount รายการ • งานด่วน $_urgentCount รายการ',
             ),
             const SizedBox(height: 16),
 
@@ -366,11 +489,15 @@ class _TasksPageState extends State<TasksPage> {
                 color: c.surface,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                  color: isDark ? c.border.withValues(alpha: 0.8) : c.border.withValues(alpha: 0.6),
+                  color: isDark
+                      ? c.border.withValues(alpha: 0.8)
+                      : c.border.withValues(alpha: 0.6),
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: isDark ? Colors.black.withValues(alpha: 0.2) : c.ink.withValues(alpha: 0.03),
+                    color: isDark
+                        ? Colors.black.withValues(alpha: 0.2)
+                        : c.ink.withValues(alpha: 0.03),
                     blurRadius: 14,
                     offset: const Offset(0, 4),
                   ),
@@ -379,36 +506,53 @@ class _TasksPageState extends State<TasksPage> {
               child: Row(
                 children: [
                   Expanded(
-                    child: _buildSegmentFilter('ทั้งหมด', _statusFilter == 'all' && _priorityFilter == 'all', () {
-                      setState(() {
-                        _statusFilter = 'all';
-                        _priorityFilter = 'all';
-                      });
-                    }),
+                    child: _buildSegmentFilter(
+                      'ทั้งหมด',
+                      _statusFilter == 'all' && _priorityFilter == 'all',
+                      () {
+                        setState(() {
+                          _statusFilter = 'all';
+                          _priorityFilter = 'all';
+                        });
+                      },
+                    ),
                   ),
                   Expanded(
-                    child: _buildSegmentFilter('ค้างส่ง', _statusFilter == 'pending' && _priorityFilter != 'urgent', () {
-                      setState(() {
-                        _statusFilter = 'pending';
-                        _priorityFilter = 'all';
-                      });
-                    }),
+                    child: _buildSegmentFilter(
+                      'ค้างส่ง',
+                      _statusFilter == 'pending' && _priorityFilter != 'urgent',
+                      () {
+                        setState(() {
+                          _statusFilter = 'pending';
+                          _priorityFilter = 'all';
+                        });
+                      },
+                    ),
                   ),
                   Expanded(
-                    child: _buildSegmentFilter('🔥 ด่วน', _priorityFilter == 'urgent', () {
-                      setState(() {
-                        _priorityFilter = 'urgent';
-                        _statusFilter = 'all';
-                      });
-                    }, isUrgent: true),
+                    child: _buildSegmentFilter(
+                      '🔥 ด่วน',
+                      _priorityFilter == 'urgent',
+                      () {
+                        setState(() {
+                          _priorityFilter = 'urgent';
+                          _statusFilter = 'all';
+                        });
+                      },
+                      isUrgent: true,
+                    ),
                   ),
                   Expanded(
-                    child: _buildSegmentFilter('เสร็จแล้ว', _statusFilter == 'completed', () {
-                      setState(() {
-                        _statusFilter = 'completed';
-                        _priorityFilter = 'all';
-                      });
-                    }),
+                    child: _buildSegmentFilter(
+                      'เสร็จแล้ว',
+                      _statusFilter == 'completed',
+                      () {
+                        setState(() {
+                          _statusFilter = 'completed';
+                          _priorityFilter = 'all';
+                        });
+                      },
+                    ),
                   ),
                 ],
               ),
@@ -420,7 +564,9 @@ class _TasksPageState extends State<TasksPage> {
                 valueListenable: ApiClient.isConnectingLong,
                 builder: (context, isLong, child) {
                   return ServerConnectingWidget(
-                    message: isLong ? 'กำลังปลุกเซิร์ฟเวอร์...' : 'กำลังดึงรายการงาน...',
+                    message: isLong
+                        ? 'กำลังปลุกเซิร์ฟเวอร์...'
+                        : 'กำลังดึงรายการงาน...',
                     subMessage: isLong
                         ? 'เซิร์ฟเวอร์กำลังเริ่มต้นทำงาน โปรดรอสักครู่...'
                         : 'กำลังดึงงานและการบ้านของคุณ...',
@@ -429,8 +575,7 @@ class _TasksPageState extends State<TasksPage> {
               ),
               const SizedBox(height: 16),
               const SkeletonCard(height: 120, borderRadius: 20),
-            ]
-            else ...[
+            ] else ...[
               // Urgent Tasks
               if (_urgentTasks.isNotEmpty) ...[
                 SectionCard(
@@ -455,23 +600,48 @@ class _TasksPageState extends State<TasksPage> {
                                   color: Colors.white.withValues(alpha: 0.2),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
-                                child: const Icon(Icons.priority_high_rounded, color: Colors.white, size: 20),
+                                child: const Icon(
+                                  Icons.priority_high_rounded,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(task['title'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 14)),
-                                    Text('วิชา: ${task['subject'] ?? '-'} • ${_formatDeadline(task['deadline'])}', style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.8))),
+                                    Text(
+                                      task['title'] ?? '',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                    Text(
+                                      'วิชา: ${task['subject'] ?? '-'} • ${_formatDeadline(task['deadline'])}',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.white.withValues(
+                                          alpha: 0.8,
+                                        ),
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ),
                               IconButton(
-                                icon: Icon(Icons.delete_outline_rounded, color: Colors.white.withValues(alpha: 0.7)),
+                                icon: Icon(
+                                  Icons.delete_outline_rounded,
+                                  color: Colors.white.withValues(alpha: 0.7),
+                                ),
                                 onPressed: () async {
                                   await TaskApiService.deleteTask(task['id']);
-                                  await NotificationService.cancelNotification((task['id'].toString().hashCode).abs() % 2147483647);
+                                  await NotificationService.cancelNotification(
+                                    (task['id'].toString().hashCode).abs() %
+                                        2147483647,
+                                  );
                                   _loadTasks();
                                   DataEventService.notifyDataChanged();
                                 },
@@ -495,13 +665,16 @@ class _TasksPageState extends State<TasksPage> {
                           for (var task in _filteredTasks)
                             Container(
                               margin: const EdgeInsets.only(bottom: 6),
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
                               decoration: BoxDecoration(
                                 color: task['isCompleted'] == true
                                     ? c.good.withValues(alpha: 0.06)
                                     : task['isUrgent'] == true
-                                        ? c.coralSoft.withValues(alpha: 0.5)
-                                        : c.surface2,
+                                    ? c.coralSoft.withValues(alpha: 0.5)
+                                    : c.surface2,
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Row(
@@ -509,13 +682,33 @@ class _TasksPageState extends State<TasksPage> {
                                   GestureDetector(
                                     onTap: () async {
                                       final deadline = task['deadline'] != null
-                                          ? (DateTime.tryParse(task['deadline']) ?? DateTime.now().add(const Duration(days: 2)))
-                                          : DateTime.now().add(const Duration(days: 2));
-                                      final newCompleted = !(task['isCompleted'] == true);
-                                      final saved = await TaskApiService.updateTask(
-                                        task['id'], task['title'], task['subject'] ?? '', task['isUrgent'] == true, newCompleted, deadline,
+                                          ? (DateTime.tryParse(
+                                                  task['deadline'],
+                                                ) ??
+                                                DateTime.now().add(
+                                                  const Duration(days: 2),
+                                                ))
+                                          : DateTime.now().add(
+                                              const Duration(days: 2),
+                                            );
+                                      final newCompleted =
+                                          !(task['isCompleted'] == true);
+                                      final saved =
+                                          await TaskApiService.updateTask(
+                                            task['id'],
+                                            task['title'],
+                                            task['subject'] ?? '',
+                                            task['isUrgent'] == true,
+                                            newCompleted,
+                                            deadline,
+                                          );
+                                      await _scheduleTaskDeadlineNotification(
+                                        saved ??
+                                            {
+                                              ...task,
+                                              'isCompleted': newCompleted,
+                                            },
                                       );
-                                      await _scheduleTaskDeadlineNotification(saved ?? {...task, 'isCompleted': newCompleted});
                                       _loadTasks();
                                       DataEventService.notifyDataChanged();
                                     },
@@ -524,47 +717,80 @@ class _TasksPageState extends State<TasksPage> {
                                       height: 24,
                                       decoration: BoxDecoration(
                                         gradient: task['isCompleted'] == true
-                                            ? LinearGradient(colors: [c.good, c.good.withValues(alpha: 0.8)])
+                                            ? LinearGradient(
+                                                colors: [
+                                                  c.good,
+                                                  c.good.withValues(alpha: 0.8),
+                                                ],
+                                              )
                                             : null,
-                                        color: task['isCompleted'] != true ? Colors.transparent : null,
+                                        color: task['isCompleted'] != true
+                                            ? Colors.transparent
+                                            : null,
                                         borderRadius: BorderRadius.circular(8),
                                         border: Border.all(
-                                          color: task['isCompleted'] == true ? c.good : c.border,
+                                          color: task['isCompleted'] == true
+                                              ? c.good
+                                              : c.border,
                                           width: 2,
                                         ),
                                       ),
                                       child: task['isCompleted'] == true
-                                          ? const Icon(Icons.check, size: 16, color: Colors.white)
+                                          ? const Icon(
+                                              Icons.check,
+                                              size: 16,
+                                              color: Colors.white,
+                                            )
                                           : null,
                                     ),
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           task['title'] ?? '',
                                           style: TextStyle(
                                             fontWeight: FontWeight.w600,
                                             fontSize: 14,
-                                            decoration: task['isCompleted'] == true ? TextDecoration.lineThrough : null,
-                                            color: task['isCompleted'] == true ? c.ink3 : c.ink,
+                                            decoration:
+                                                task['isCompleted'] == true
+                                                ? TextDecoration.lineThrough
+                                                : null,
+                                            color: task['isCompleted'] == true
+                                                ? c.ink3
+                                                : c.ink,
                                           ),
                                         ),
                                         const SizedBox(height: 2),
-                                        Text('วิชา: ${task['subject'] ?? '-'} • ${_formatDeadline(task['deadline'])}',
-                                            style: TextStyle(fontSize: 12, color: c.ink3)),
+                                        Text(
+                                          'วิชา: ${task['subject'] ?? '-'} • ${_formatDeadline(task['deadline'])}',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: c.ink3,
+                                          ),
+                                        ),
                                       ],
                                     ),
                                   ),
                                   if (task['isUrgent'] == true)
                                     Pill('ด่วน', fg: c.coral, bg: c.coralSoft),
                                   IconButton(
-                                    icon: Icon(Icons.delete_outline_rounded, size: 20, color: c.coral),
+                                    icon: Icon(
+                                      Icons.delete_outline_rounded,
+                                      size: 20,
+                                      color: c.coral,
+                                    ),
                                     onPressed: () async {
-                                      await TaskApiService.deleteTask(task['id']);
-                                      await NotificationService.cancelNotification((task['id'].toString().hashCode).abs() % 2147483647);
+                                      await TaskApiService.deleteTask(
+                                        task['id'],
+                                      );
+                                      await NotificationService.cancelNotification(
+                                        (task['id'].toString().hashCode).abs() %
+                                            2147483647,
+                                      );
                                       _loadTasks();
                                       DataEventService.notifyDataChanged();
                                     },
@@ -576,7 +802,10 @@ class _TasksPageState extends State<TasksPage> {
                       )
                     : Padding(
                         padding: const EdgeInsets.all(24),
-                        child: Text('ยังไม่มีงาน กด + เพื่อเพิ่ม', style: TextStyle(color: c.ink3)),
+                        child: Text(
+                          'ยังไม่มีงาน กด + เพื่อเพิ่ม',
+                          style: TextStyle(color: c.ink3),
+                        ),
                       ),
               ),
             ],
@@ -586,7 +815,12 @@ class _TasksPageState extends State<TasksPage> {
     );
   }
 
-  Widget _buildSegmentFilter(String label, bool isSelected, VoidCallback onTap, {bool isUrgent = false}) {
+  Widget _buildSegmentFilter(
+    String label,
+    bool isSelected,
+    VoidCallback onTap, {
+    bool isUrgent = false,
+  }) {
     final c = context.c;
 
     return GestureDetector(
@@ -596,10 +830,14 @@ class _TasksPageState extends State<TasksPage> {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? (isUrgent ? c.coralSoft : c.accentSoft) : Colors.transparent,
+          color: isSelected
+              ? (isUrgent ? c.coralSoft : c.accentSoft)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(14),
           border: isSelected
-              ? Border.all(color: (isUrgent ? c.coral : c.accent).withValues(alpha: 0.3))
+              ? Border.all(
+                  color: (isUrgent ? c.coral : c.accent).withValues(alpha: 0.3),
+                )
               : null,
         ),
         child: Text(

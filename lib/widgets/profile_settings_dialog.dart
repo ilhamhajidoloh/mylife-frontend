@@ -8,10 +8,14 @@ class ProfileSettingsDialog extends StatefulWidget {
 
   const ProfileSettingsDialog({super.key, this.onProfileUpdated});
 
-  static Future<void> show(BuildContext context, {VoidCallback? onProfileUpdated}) {
+  static Future<void> show(
+    BuildContext context, {
+    VoidCallback? onProfileUpdated,
+  }) {
     return showDialog(
       context: context,
-      builder: (context) => ProfileSettingsDialog(onProfileUpdated: onProfileUpdated),
+      builder: (context) =>
+          ProfileSettingsDialog(onProfileUpdated: onProfileUpdated),
     );
   }
 
@@ -52,10 +56,7 @@ class _ProfileSettingsDialogState extends State<ProfileSettingsDialog> {
       _isLoadingProfile = false;
     });
 
-    await Future.wait([
-      _fetchUserProfile(),
-      _fetchIntegrations(),
-    ]);
+    await Future.wait([_fetchUserProfile(), _fetchIntegrations()]);
   }
 
   Future<void> _fetchUserProfile() async {
@@ -64,12 +65,13 @@ class _ProfileSettingsDialogState extends State<ProfileSettingsDialog> {
       if (res != null && res is Map) {
         if (res['fullName'] != null) {
           _nameController.text = res['fullName'];
-          await UserSession.saveUser(
-            _userId,
-            res['email'] ?? _email,
-            res['fullName'],
-          );
         }
+        await UserSession.saveUser(
+          _userId,
+          res['email'] ?? _email,
+          res['fullName'] ?? _nameController.text,
+          profileImageUrl: res['profileImageUrl'],
+        );
       }
     } catch (_) {}
   }
@@ -114,7 +116,9 @@ class _ProfileSettingsDialogState extends State<ProfileSettingsDialog> {
         widget.onProfileUpdated?.call();
       }
     } catch (e) {
-      _showMessage('เกิดข้อผิดพลาด: ${e.toString().replaceAll('Exception: ', '')}');
+      _showMessage(
+        'เกิดข้อผิดพลาด: ${e.toString().replaceAll('Exception: ', '')}',
+      );
     } finally {
       if (mounted) setState(() => _isSavingProfile = false);
     }
@@ -148,7 +152,9 @@ class _ProfileSettingsDialogState extends State<ProfileSettingsDialog> {
         _confirmPasswordController.clear();
       }
     } catch (e) {
-      _showMessage('เกิดข้อผิดพลาด: ${e.toString().replaceAll('Exception: ', '')}');
+      _showMessage(
+        'เกิดข้อผิดพลาด: ${e.toString().replaceAll('Exception: ', '')}',
+      );
     } finally {
       if (mounted) setState(() => _isChangingPassword = false);
     }
@@ -207,7 +213,8 @@ class _ProfileSettingsDialogState extends State<ProfileSettingsDialog> {
               child: const Text('ยกเลิก'),
             ),
             ElevatedButton(
-              onPressed: () => Navigator.pop(context, lineIdController.text.trim()),
+              onPressed: () =>
+                  Navigator.pop(context, lineIdController.text.trim()),
               child: const Text('ตกลง'),
             ),
           ],
@@ -254,12 +261,14 @@ class _ProfileSettingsDialogState extends State<ProfileSettingsDialog> {
             // Header
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              decoration: BoxDecoration(
-                gradient: colors.accentGradient,
-              ),
+              decoration: BoxDecoration(gradient: colors.accentGradient),
               child: Row(
                 children: [
-                  const Icon(Icons.manage_accounts, color: Colors.white, size: 28),
+                  const Icon(
+                    Icons.manage_accounts,
+                    color: Colors.white,
+                    size: 28,
+                  ),
                   const SizedBox(width: 12),
                   const Expanded(
                     child: Text(
@@ -289,7 +298,11 @@ class _ProfileSettingsDialogState extends State<ProfileSettingsDialog> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           // 1. Profile Section
-                          _buildSectionHeader('ข้อมูลส่วนตัว', Icons.person_outline, colors),
+                          _buildSectionHeader(
+                            'ข้อมูลส่วนตัว',
+                            Icons.person_outline,
+                            colors,
+                          ),
                           const SizedBox(height: 12),
                           TextField(
                             controller: TextEditingController(text: _email),
@@ -316,7 +329,9 @@ class _ProfileSettingsDialogState extends State<ProfileSettingsDialog> {
                                   ? const SizedBox(
                                       width: 16,
                                       height: 16,
-                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
                                     )
                                   : const Icon(Icons.save_outlined),
                               label: const Text('บันทึกข้อมูลส่วนตัว'),
@@ -326,7 +341,11 @@ class _ProfileSettingsDialogState extends State<ProfileSettingsDialog> {
                           const Divider(height: 32),
 
                           // 2. Password Section
-                          _buildSectionHeader('เปลี่ยนรหัสผ่าน', Icons.lock_outline, colors),
+                          _buildSectionHeader(
+                            'เปลี่ยนรหัสผ่าน',
+                            Icons.lock_outline,
+                            colors,
+                          ),
                           const SizedBox(height: 12),
                           TextField(
                             controller: _currentPasswordController,
@@ -358,12 +377,16 @@ class _ProfileSettingsDialogState extends State<ProfileSettingsDialog> {
                           Align(
                             alignment: Alignment.centerRight,
                             child: OutlinedButton.icon(
-                              onPressed: _isChangingPassword ? null : _changePassword,
+                              onPressed: _isChangingPassword
+                                  ? null
+                                  : _changePassword,
                               icon: _isChangingPassword
                                   ? const SizedBox(
                                       width: 16,
                                       height: 16,
-                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
                                     )
                                   : const Icon(Icons.password),
                               label: const Text('เปลี่ยนรหัสผ่าน'),
@@ -373,7 +396,11 @@ class _ProfileSettingsDialogState extends State<ProfileSettingsDialog> {
                           const Divider(height: 32),
 
                           // 3. Integrations Section
-                          _buildSectionHeader('การเชื่อมต่อบริการภายนอก', Icons.extension_outlined, colors),
+                          _buildSectionHeader(
+                            'การเชื่อมต่อบริการภายนอก',
+                            Icons.extension_outlined,
+                            colors,
+                          ),
                           const SizedBox(height: 12),
 
                           if (_isLoadingIntegrations)
@@ -388,11 +415,19 @@ class _ProfileSettingsDialogState extends State<ProfileSettingsDialog> {
                                 side: BorderSide(color: colors.border),
                               ),
                               child: SwitchListTile(
-                                secondary: const Icon(Icons.calendar_month, color: Colors.redAccent),
+                                secondary: const Icon(
+                                  Icons.calendar_month,
+                                  color: Colors.redAccent,
+                                ),
                                 title: const Text('Google Calendar'),
                                 subtitle: Text(
-                                  _googleConnected ? 'เชื่อมต่อแล้ว (ซิงก์กิจกรรมอัตโนมัติ)' : 'ยังไม่ได้เชื่อมต่อ',
-                                  style: TextStyle(color: colors.ink2, fontSize: 12),
+                                  _googleConnected
+                                      ? 'เชื่อมต่อแล้ว (ซิงก์กิจกรรมอัตโนมัติ)'
+                                      : 'ยังไม่ได้เชื่อมต่อ',
+                                  style: TextStyle(
+                                    color: colors.ink2,
+                                    fontSize: 12,
+                                  ),
                                 ),
                                 value: _googleConnected,
                                 onChanged: _toggleGoogleCalendar,
@@ -410,13 +445,19 @@ class _ProfileSettingsDialogState extends State<ProfileSettingsDialog> {
                                 side: BorderSide(color: colors.border),
                               ),
                               child: SwitchListTile(
-                                secondary: const Icon(Icons.chat_bubble_outline, color: Colors.green),
+                                secondary: const Icon(
+                                  Icons.chat_bubble_outline,
+                                  color: Colors.green,
+                                ),
                                 title: const Text('LINE Notifications'),
                                 subtitle: Text(
                                   _lineConnected
                                       ? 'เชื่อมต่อแล้ว (${_lineUserId ?? ''})'
                                       : 'ยังไม่ได้เชื่อมต่อ (รับการแจ้งเตือนทาง LINE)',
-                                  style: TextStyle(color: colors.ink2, fontSize: 12),
+                                  style: TextStyle(
+                                    color: colors.ink2,
+                                    fontSize: 12,
+                                  ),
                                 ),
                                 value: _lineConnected,
                                 onChanged: _toggleLine,

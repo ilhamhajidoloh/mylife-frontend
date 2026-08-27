@@ -1292,6 +1292,7 @@ class _SchedulePageState extends State<SchedulePage>
           ],
         ),
         child: FloatingActionButton.extended(
+          heroTag: 'fab_schedule',
           onPressed: () => _openCourseModal(),
           icon: const Icon(Icons.add_rounded, color: Colors.white),
           label: const Text(

@@ -8,6 +8,7 @@ class UserSession {
   static const String _keyThemeMode = 'theme_mode';
   static const String _keyIsFirstRun = 'is_first_run';
   static const String _keyAuthToken = 'auth_token';
+  static const String _keyProfileImageUrl = 'profile_image_url';
   static const String _defaultUserId = '00000000-0000-0000-0000-000000000001';
 
   static Future<bool> isFirstRun() async {
@@ -40,12 +41,23 @@ class UserSession {
     return prefs.getString(_keyUserEmail) ?? 'user@mylife.com';
   }
 
+  static Future<String?> getProfileImageUrl() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keyProfileImageUrl);
+  }
+
   static Future<String?> getAuthToken() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_keyAuthToken);
   }
 
-  static Future<void> saveUser(String userId, String email, String fullName, {String? token}) async {
+  static Future<void> saveUser(
+    String userId,
+    String email,
+    String fullName, {
+    String? token,
+    String? profileImageUrl,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keyIsLoggedIn, true);
     await prefs.setString(_keyUserId, userId);
@@ -53,6 +65,18 @@ class UserSession {
     await prefs.setString(_keyUserName, fullName);
     if (token != null) {
       await prefs.setString(_keyAuthToken, token);
+    }
+    if (profileImageUrl != null) {
+      await prefs.setString(_keyProfileImageUrl, profileImageUrl);
+    }
+  }
+
+  static Future<void> saveProfileImageUrl(String? url) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (url != null && url.isNotEmpty) {
+      await prefs.setString(_keyProfileImageUrl, url);
+    } else {
+      await prefs.remove(_keyProfileImageUrl);
     }
   }
 
@@ -63,6 +87,7 @@ class UserSession {
     await prefs.remove(_keyUserEmail);
     await prefs.remove(_keyUserName);
     await prefs.remove(_keyAuthToken);
+    await prefs.remove(_keyProfileImageUrl);
   }
 
   static Future<void> saveThemeMode(String mode) async {

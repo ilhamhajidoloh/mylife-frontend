@@ -1086,6 +1086,7 @@ class _ActivityPageState extends State<ActivityPage> {
           ],
         ),
         child: FloatingActionButton.extended(
+          heroTag: 'fab_activity',
           onPressed: () => _openActivityModal(),
           icon: const Icon(Icons.add_rounded, color: Colors.white),
           label: const Text(

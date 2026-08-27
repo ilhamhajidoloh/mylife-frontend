@@ -14,7 +14,9 @@ import 'services/user_session.dart';
 import 'services/notification_service.dart';
 import 'services/connectivity_service.dart';
 import 'services/api_client.dart';
+import 'services/api_services.dart';
 import 'services/data_event_service.dart';
+import 'config/api_config.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -130,6 +132,7 @@ class _HomeShellState extends State<HomeShell> {
   bool _isChecking = true;
   bool _isLoggedIn = false;
   String _userName = 'โปรไฟล์';
+  String? _profileImageUrl;
   bool _isOnline = true;
   StreamSubscription<bool>? _connectivitySubscription;
 
@@ -194,12 +197,46 @@ class _HomeShellState extends State<HomeShell> {
     setState(() => _isChecking = true);
     final loggedIn = await UserSession.isLoggedIn();
     final name = await UserSession.getUserName();
+    final userId = await UserSession.getUserId();
+
+    // ใช้ Backend Streaming URL เสมอ (โหลดได้แน่นอน ไม่ขึ้นอยู่กับ Oracle URL)
+    final String? profileImg = (loggedIn && userId.isNotEmpty)
+        ? ApiConfig.authProfileImageUrl(userId)
+        : null;
+
     if (mounted) {
       setState(() {
         _isLoggedIn = loggedIn;
         _userName = name;
+        _profileImageUrl = profileImg;
         _isChecking = false;
       });
+    }
+
+    if (loggedIn) {
+      try {
+        final res = await AuthApiService.getMe();
+        if (res != null && res is Map) {
+          final updatedName = (res['fullName'] as String?) ?? name;
+          final email =
+              (res['email'] as String?) ?? await UserSession.getUserEmail();
+          await UserSession.saveUser(
+            userId,
+            email,
+            updatedName,
+            profileImageUrl: res['profileImageUrl'] as String?,
+          );
+          if (mounted) {
+            setState(() {
+              _userName = updatedName;
+              // ยังคงใช้ Backend Streaming URL เพื่อความเสถียร
+              if (userId.isNotEmpty) {
+                _profileImageUrl = ApiConfig.authProfileImageUrl(userId);
+              }
+            });
+          }
+        }
+      } catch (_) {}
     }
   }
 
@@ -341,30 +378,60 @@ class _HomeShellState extends State<HomeShell> {
                   Expanded(
                     child: Row(
                       children: [
-                        Container(
-                          width: small ? 38 : 42,
-                          height: small ? 38 : 42,
-                          decoration: BoxDecoration(
-                            gradient: c.heroGradient,
-                            borderRadius: BorderRadius.circular(14),
-                            boxShadow: [
-                              BoxShadow(
-                                color: c.accent.withValues(alpha: 0.35),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Center(
-                            child: Text(
-                              _userName.isNotEmpty
-                                  ? _userName[0].toUpperCase()
-                                  : 'M',
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w900,
-                                color: Colors.white,
-                              ),
+                        GestureDetector(
+                          onTap: _openProfile,
+                          child: Container(
+                            width: small ? 38 : 42,
+                            height: small ? 38 : 42,
+                            decoration: BoxDecoration(
+                              gradient: c.heroGradient,
+                              borderRadius: BorderRadius.circular(14),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: c.accent.withValues(alpha: 0.35),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(14),
+                              child:
+                                  _profileImageUrl != null &&
+                                      _profileImageUrl!.isNotEmpty
+                                  ? Image.network(
+                                      _profileImageUrl!,
+                                      width: small ? 38 : 42,
+                                      height: small ? 38 : 42,
+                                      fit: BoxFit.cover,
+                                      errorBuilder:
+                                          (context, error, stackTrace) {
+                                            return Center(
+                                              child: Text(
+                                                _userName.isNotEmpty
+                                                    ? _userName[0].toUpperCase()
+                                                    : 'M',
+                                                style: const TextStyle(
+                                                  fontSize: 18,
+                                                  fontWeight: FontWeight.w900,
+                                                  color: Colors.white,
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                    )
+                                  : Center(
+                                      child: Text(
+                                        _userName.isNotEmpty
+                                            ? _userName[0].toUpperCase()
+                                            : 'M',
+                                        style: const TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w900,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ),
                             ),
                           ),
                         ),

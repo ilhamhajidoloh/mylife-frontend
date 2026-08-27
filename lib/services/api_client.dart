@@ -7,7 +7,9 @@ import 'logger.dart';
 
 class ApiClient {
   static bool _isOffline = false;
-  static final ValueNotifier<bool> isConnectingLong = ValueNotifier<bool>(false);
+  static final ValueNotifier<bool> isConnectingLong = ValueNotifier<bool>(
+    false,
+  );
 
   static const Duration requestTimeout = Duration(seconds: 45);
   static const int maxRetries = 2;
@@ -47,9 +49,14 @@ class ApiClient {
         final response = await requestFn(headers).timeout(requestTimeout);
 
         // หากได้ status 502/503/504 ช่วงที่ Render กำลังปลุก และยังมีโควต้า retry ให้ลองยิงใหม่
-        if ((response.statusCode == 502 || response.statusCode == 503 || response.statusCode == 504) &&
+        if ((response.statusCode == 502 ||
+                response.statusCode == 503 ||
+                response.statusCode == 504) &&
             attempts <= maxRetries) {
-          Logger.info('ApiClient', '$method $url returned status ${response.statusCode}, retrying ($attempts/$maxRetries)...');
+          Logger.info(
+            'ApiClient',
+            '$method $url returned status ${response.statusCode}, retrying ($attempts/$maxRetries)...',
+          );
           await Future.delayed(const Duration(seconds: 2));
           continue;
         }
@@ -58,8 +65,12 @@ class ApiClient {
         isConnectingLong.value = false;
         return response;
       } catch (e, st) {
-        if ((e is TimeoutException || e.toString().contains('Timeout')) && attempts <= maxRetries) {
-          Logger.info('ApiClient', '$method $url timed out, retrying ($attempts/$maxRetries)...');
+        if ((e is TimeoutException || e.toString().contains('Timeout')) &&
+            attempts <= maxRetries) {
+          Logger.info(
+            'ApiClient',
+            '$method $url timed out, retrying ($attempts/$maxRetries)...',
+          );
           await Future.delayed(const Duration(seconds: 2));
           continue;
         }
@@ -81,11 +92,18 @@ class ApiClient {
         url,
         (headers) => http.get(Uri.parse(url), headers: headers),
       );
-      Logger.apiResponse(method, url, response.statusCode, _tryDecodeBody(response.body));
+      Logger.apiResponse(
+        method,
+        url,
+        response.statusCode,
+        _tryDecodeBody(response.body),
+      );
       if (response.statusCode >= 200 && response.statusCode < 300) {
         return _tryDecodeBody(response.body);
       } else {
-        throw Exception('Server Error ${response.statusCode}: ${response.body}');
+        throw Exception(
+          'Server Error ${response.statusCode}: ${response.body}',
+        );
       }
     } catch (e) {
       rethrow;
@@ -100,17 +118,21 @@ class ApiClient {
       final response = await _executeWithRetry(
         method,
         url,
-        (headers) => http.post(
-          Uri.parse(url),
-          headers: headers,
-          body: jsonEncode(data),
-        ),
+        (headers) =>
+            http.post(Uri.parse(url), headers: headers, body: jsonEncode(data)),
       );
-      Logger.apiResponse(method, url, response.statusCode, _tryDecodeBody(response.body));
+      Logger.apiResponse(
+        method,
+        url,
+        response.statusCode,
+        _tryDecodeBody(response.body),
+      );
       if (response.statusCode >= 200 && response.statusCode < 300) {
         return _tryDecodeBody(response.body);
       } else {
-        throw Exception('Server Error ${response.statusCode}: ${response.body}');
+        throw Exception(
+          'Server Error ${response.statusCode}: ${response.body}',
+        );
       }
     } catch (e) {
       rethrow;
@@ -125,17 +147,21 @@ class ApiClient {
       final response = await _executeWithRetry(
         method,
         url,
-        (headers) => http.put(
-          Uri.parse(url),
-          headers: headers,
-          body: jsonEncode(data),
-        ),
+        (headers) =>
+            http.put(Uri.parse(url), headers: headers, body: jsonEncode(data)),
       );
-      Logger.apiResponse(method, url, response.statusCode, _tryDecodeBody(response.body));
+      Logger.apiResponse(
+        method,
+        url,
+        response.statusCode,
+        _tryDecodeBody(response.body),
+      );
       if (response.statusCode >= 200 && response.statusCode < 300) {
         return _tryDecodeBody(response.body);
       } else {
-        throw Exception('Server Error ${response.statusCode}: ${response.body}');
+        throw Exception(
+          'Server Error ${response.statusCode}: ${response.body}',
+        );
       }
     } catch (e) {
       rethrow;
@@ -152,11 +178,59 @@ class ApiClient {
         url,
         (headers) => http.delete(Uri.parse(url), headers: headers),
       );
-      Logger.apiResponse(method, url, response.statusCode, _tryDecodeBody(response.body));
+      Logger.apiResponse(
+        method,
+        url,
+        response.statusCode,
+        _tryDecodeBody(response.body),
+      );
       if (response.statusCode >= 200 && response.statusCode < 300) {
         return _tryDecodeBody(response.body);
       } else {
-        throw Exception('Server Error ${response.statusCode}: ${response.body}');
+        throw Exception(
+          'Server Error ${response.statusCode}: ${response.body}',
+        );
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  static Future<dynamic> uploadFile(
+    String url,
+    String filePath,
+    String fieldName,
+  ) async {
+    if (_isOffline) return null;
+    const method = 'POST';
+    Logger.apiRequest(method, url);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token');
+      final headers = <String, String>{};
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
+      final request = http.MultipartRequest('POST', Uri.parse(url));
+      request.headers.addAll(headers);
+      request.files.add(await http.MultipartFile.fromPath(fieldName, filePath));
+
+      final streamedResponse = await request.send().timeout(requestTimeout);
+      final response = await http.Response.fromStream(streamedResponse);
+      Logger.apiResponse(
+        method,
+        url,
+        response.statusCode,
+        _tryDecodeBody(response.body),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return _tryDecodeBody(response.body);
+      } else {
+        throw Exception(
+          'Server Error ${response.statusCode}: ${response.body}',
+        );
       }
     } catch (e) {
       rethrow;
@@ -173,4 +247,3 @@ class ApiClient {
     }
   }
 }
-

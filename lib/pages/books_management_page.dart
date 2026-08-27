@@ -57,7 +57,9 @@ class _BooksManagementPageState extends State<BooksManagementPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('ยืนยันการลบ'),
-        content: Text('คุณต้องการลบสมุดบัญชี "$bookName" หรือไม่?\n\nธุรกรรมทั้งหมดในสมุดนี้จะถูกลบด้วย'),
+        content: Text(
+          'คุณต้องการลบสมุดบัญชี "$bookName" หรือไม่?\n\nธุรกรรมทั้งหมดในสมุดนี้จะถูกลบด้วย',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -77,17 +79,17 @@ class _BooksManagementPageState extends State<BooksManagementPage> {
     try {
       await BookApiService.deleteBook(bookId);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('ลบสมุดบัญชีสำเร็จ')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('ลบสมุดบัญชีสำเร็จ')));
       }
       _loadBooks();
     } catch (e) {
       Logger.error('BooksManagementPage', 'Delete book error: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('ลบสมุดบัญชีไม่สำเร็จ')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('ลบสมุดบัญชีไม่สำเร็จ')));
       }
     }
   }
@@ -117,9 +119,16 @@ class _BooksManagementPageState extends State<BooksManagementPage> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.menu_book_outlined, size: 64, color: c.ink3),
+                              Icon(
+                                Icons.menu_book_outlined,
+                                size: 64,
+                                color: c.ink3,
+                              ),
                               const SizedBox(height: 16),
-                              Text('ยังไม่มีสมุดบัญชี', style: TextStyle(fontSize: 16, color: c.ink3)),
+                              Text(
+                                'ยังไม่มีสมุดบัญชี',
+                                style: TextStyle(fontSize: 16, color: c.ink3),
+                              ),
                             ],
                           ),
                         )
@@ -169,10 +178,15 @@ class _BooksManagementPageState extends State<BooksManagementPage> {
                                     ),
                                     if (isDefault)
                                       Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 4,
+                                        ),
                                         decoration: BoxDecoration(
                                           color: c.accent.withOpacity(0.2),
-                                          borderRadius: BorderRadius.circular(6),
+                                          borderRadius: BorderRadius.circular(
+                                            6,
+                                          ),
                                         ),
                                         child: Text(
                                           'ค่าเริ่มต้น',
@@ -193,12 +207,24 @@ class _BooksManagementPageState extends State<BooksManagementPage> {
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     IconButton(
-                                      icon: Icon(Icons.edit_outlined, size: 20, color: c.ink3),
-                                      onPressed: () => _openBookForm(book: book),
+                                      icon: Icon(
+                                        Icons.edit_outlined,
+                                        size: 20,
+                                        color: c.ink3,
+                                      ),
+                                      onPressed: () =>
+                                          _openBookForm(book: book),
                                     ),
                                     IconButton(
-                                      icon: Icon(Icons.delete_outline, size: 20, color: c.coral),
-                                      onPressed: () => _deleteBook(book['id'], book['name'] ?? ''),
+                                      icon: Icon(
+                                        Icons.delete_outline,
+                                        size: 20,
+                                        color: c.coral,
+                                      ),
+                                      onPressed: () => _deleteBook(
+                                        book['id'],
+                                        book['name'] ?? '',
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -210,10 +236,14 @@ class _BooksManagementPageState extends State<BooksManagementPage> {
               ],
             ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'fab_books',
         onPressed: () => _openBookForm(),
         backgroundColor: c.accent,
         icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text('สร้างสมุดบัญชี', style: TextStyle(color: Colors.white)),
+        label: const Text(
+          'สร้างสมุดบัญชี',
+          style: TextStyle(color: Colors.white),
+        ),
       ),
     );
   }
@@ -236,7 +266,22 @@ class _BookFormModalState extends State<_BookFormModal> {
   bool _isDefault = false;
   bool _isSubmitting = false;
 
-  final List<String> _icons = ['📔', '📕', '📗', '📘', '📙', '📓', '📒', '💰', '💳', '🏦', '💵', '💴', '💶', '💷'];
+  final List<String> _icons = [
+    '📔',
+    '📕',
+    '📗',
+    '📘',
+    '📙',
+    '📓',
+    '📒',
+    '💰',
+    '💳',
+    '🏦',
+    '💵',
+    '💴',
+    '💶',
+    '💷',
+  ];
   final List<Map<String, dynamic>> _colors = [
     {'name': 'violet', 'color': const Color(0xFF8B5CF6)},
     {'name': 'blue', 'color': const Color(0xFF3B82F6)},
@@ -297,15 +342,21 @@ class _BookFormModalState extends State<_BookFormModal> {
       if (mounted) {
         Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(widget.book != null ? 'แก้ไขสมุดบัญชีสำเร็จ' : 'สร้างสมุดบัญชีสำเร็จ')),
+          SnackBar(
+            content: Text(
+              widget.book != null
+                  ? 'แก้ไขสมุดบัญชีสำเร็จ'
+                  : 'สร้างสมุดบัญชีสำเร็จ',
+            ),
+          ),
         );
       }
     } catch (e) {
       Logger.error('BooksManagementPage', 'Submit book error: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('บันทึกไม่สำเร็จ')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('บันทึกไม่สำเร็จ')));
       }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
@@ -334,7 +385,11 @@ class _BookFormModalState extends State<_BookFormModal> {
               children: [
                 Text(
                   widget.book != null ? 'แก้ไขสมุดบัญชี' : 'สร้างสมุดบัญชีใหม่',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: c.ink),
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: c.ink,
+                  ),
                 ),
                 const SizedBox(height: 24),
 
@@ -361,7 +416,14 @@ class _BookFormModalState extends State<_BookFormModal> {
                 const SizedBox(height: 20),
 
                 // Icon selector
-                Text('เลือกไอคอน', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink2)),
+                Text(
+                  'เลือกไอคอน',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: c.ink2,
+                  ),
+                ),
                 const SizedBox(height: 12),
                 Wrap(
                   spacing: 8,
@@ -381,7 +443,12 @@ class _BookFormModalState extends State<_BookFormModal> {
                             width: isSelected ? 2 : 1,
                           ),
                         ),
-                        child: Center(child: Text(icon, style: const TextStyle(fontSize: 24))),
+                        child: Center(
+                          child: Text(
+                            icon,
+                            style: const TextStyle(fontSize: 24),
+                          ),
+                        ),
                       ),
                     );
                   }).toList(),
@@ -389,7 +456,14 @@ class _BookFormModalState extends State<_BookFormModal> {
                 const SizedBox(height: 20),
 
                 // Color selector
-                Text('เลือกสี', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.ink2)),
+                Text(
+                  'เลือกสี',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: c.ink2,
+                  ),
+                ),
                 const SizedBox(height: 12),
                 Wrap(
                   spacing: 8,
@@ -397,7 +471,8 @@ class _BookFormModalState extends State<_BookFormModal> {
                   children: _colors.map((colorData) {
                     final isSelected = _selectedColor == colorData['name'];
                     return GestureDetector(
-                      onTap: () => setState(() => _selectedColor = colorData['name']),
+                      onTap: () =>
+                          setState(() => _selectedColor = colorData['name']),
                       child: Container(
                         width: 48,
                         height: 48,
@@ -405,12 +480,18 @@ class _BookFormModalState extends State<_BookFormModal> {
                           color: colorData['color'],
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(
-                            color: isSelected ? Colors.white : Colors.transparent,
+                            color: isSelected
+                                ? Colors.white
+                                : Colors.transparent,
                             width: 3,
                           ),
                         ),
                         child: isSelected
-                            ? const Icon(Icons.check, color: Colors.white, size: 24)
+                            ? const Icon(
+                                Icons.check,
+                                color: Colors.white,
+                                size: 24,
+                              )
                             : null,
                       ),
                     );
@@ -422,8 +503,14 @@ class _BookFormModalState extends State<_BookFormModal> {
                 SwitchListTile(
                   value: _isDefault,
                   onChanged: (value) => setState(() => _isDefault = value),
-                  title: Text('ตั้งเป็นสมุดบัญชีหลัก', style: TextStyle(fontSize: 14, color: c.ink2)),
-                  subtitle: Text('ใช้เป็นค่าเริ่มต้นเมื่อเพิ่มธุรกรรม', style: TextStyle(fontSize: 12, color: c.ink3)),
+                  title: Text(
+                    'ตั้งเป็นสมุดบัญชีหลัก',
+                    style: TextStyle(fontSize: 14, color: c.ink2),
+                  ),
+                  subtitle: Text(
+                    'ใช้เป็นค่าเริ่มต้นเมื่อเพิ่มธุรกรรม',
+                    style: TextStyle(fontSize: 12, color: c.ink3),
+                  ),
                   contentPadding: EdgeInsets.zero,
                 ),
                 const SizedBox(height: 24),
@@ -433,11 +520,15 @@ class _BookFormModalState extends State<_BookFormModal> {
                   children: [
                     Expanded(
                       child: OutlinedButton(
-                        onPressed: _isSubmitting ? null : () => Navigator.pop(context),
+                        onPressed: _isSubmitting
+                            ? null
+                            : () => Navigator.pop(context),
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           side: BorderSide(color: c.border),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
                         child: Text('ยกเลิก', style: TextStyle(color: c.ink2)),
                       ),
@@ -449,17 +540,25 @@ class _BookFormModalState extends State<_BookFormModal> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: c.accent,
                           padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
                         child: _isSubmitting
                             ? const SizedBox(
                                 height: 20,
                                 width: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
                               )
                             : Text(
                                 widget.book != null ? 'บันทึก' : 'สร้าง',
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                       ),
                     ),

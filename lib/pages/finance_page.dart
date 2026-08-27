@@ -1339,6 +1339,7 @@ class _FinancePageState extends State<FinancePage> {
           ],
         ),
         child: FloatingActionButton.extended(
+          heroTag: 'fab_finance',
           onPressed: _openTransactionModal,
           icon: const Icon(Icons.add_rounded, color: Colors.white),
           label: const Text(

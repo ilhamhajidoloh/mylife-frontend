@@ -24,9 +24,9 @@ class _AuthPageState extends State<AuthPage> {
 
   void _finishAuth(String message) {
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
       if (widget.onLoginSuccess != null) {
         widget.onLoginSuccess!();
       } else if (Navigator.canPop(context)) {
@@ -53,13 +53,25 @@ class _AuthPageState extends State<AuthPage> {
       if (isLogin) {
         final res = await AuthApiService.login(email, password);
         if (res != null && res['userId'] != null) {
-          await UserSession.saveUser(res['userId'], res['email'] ?? email, res['fullName'] ?? 'ผู้ใช้งาน', token: res['token']);
+          await UserSession.saveUser(
+            res['userId'],
+            res['email'] ?? email,
+            res['fullName'] ?? 'ผู้ใช้งาน',
+            token: res['token'],
+            profileImageUrl: res['profileImageUrl'],
+          );
           _finishAuth('เข้าสู่ระบบสำเร็จ');
         }
       } else {
         final res = await AuthApiService.register(email, password, name);
         if (res != null && res['userId'] != null) {
-          await UserSession.saveUser(res['userId'], res['email'] ?? email, res['fullName'] ?? name, token: res['token']);
+          await UserSession.saveUser(
+            res['userId'],
+            res['email'] ?? email,
+            res['fullName'] ?? name,
+            token: res['token'],
+            profileImageUrl: res['profileImageUrl'],
+          );
           _finishAuth('ลงทะเบียนสำเร็จ');
         }
       }
@@ -67,7 +79,10 @@ class _AuthPageState extends State<AuthPage> {
       Logger.catchBlock('AuthPage', 'login/register', e, st);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาลองใหม่'), backgroundColor: Colors.red),
+          const SnackBar(
+            content: Text('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาลองใหม่'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } finally {
@@ -82,7 +97,8 @@ class _AuthPageState extends State<AuthPage> {
       String? email;
       String? fullName;
 
-      const String googleClientId = '1015105923446-9bm732p3tdsmqgtl9okpj9j73290n5tp.apps.googleusercontent.com';
+      const String googleClientId =
+          '1015105923446-9bm732p3tdsmqgtl9okpj9j73290n5tp.apps.googleusercontent.com';
 
       final GoogleSignIn googleSignIn = GoogleSignIn(
         clientId: kIsWeb ? googleClientId : null,
@@ -94,7 +110,8 @@ class _AuthPageState extends State<AuthPage> {
         if (googleUser != null) {
           googleId = googleUser.id;
           email = googleUser.email;
-          fullName = googleUser.displayName ?? googleUser.email.split('@').first;
+          fullName =
+              googleUser.displayName ?? googleUser.email.split('@').first;
         } else {
           if (mounted) setState(() => isLoading = false);
           return;
@@ -122,7 +139,13 @@ class _AuthPageState extends State<AuthPage> {
         );
 
         if (res != null && res['userId'] != null) {
-          await UserSession.saveUser(res['userId'], res['email'] ?? email, res['fullName'] ?? fullName ?? 'ผู้ใช้งาน Google', token: res['token']);
+          await UserSession.saveUser(
+            res['userId'],
+            res['email'] ?? email,
+            res['fullName'] ?? fullName ?? 'ผู้ใช้งาน Google',
+            token: res['token'],
+            profileImageUrl: res['profileImageUrl'],
+          );
           _finishAuth('เข้าสู่ระบบด้วย Google สำเร็จ');
         } else {
           throw Exception('ไม่ได้รับข้อมูลจากเซิร์ฟเวอร์');
@@ -132,7 +155,12 @@ class _AuthPageState extends State<AuthPage> {
       Logger.catchBlock('AuthPage', 'googleLogin', e, st);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('เข้าสู่ระบบด้วย Google ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง'), backgroundColor: Colors.red),
+          const SnackBar(
+            content: Text(
+              'เข้าสู่ระบบด้วย Google ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง',
+            ),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } finally {
@@ -150,7 +178,13 @@ class _AuthPageState extends State<AuthPage> {
         'User $provider',
       );
       if (res != null && res['userId'] != null) {
-        await UserSession.saveUser(res['userId'], res['email'] ?? 'user@$provider.com', res['fullName'] ?? 'User $provider', token: res['token']);
+        await UserSession.saveUser(
+          res['userId'],
+          res['email'] ?? 'user@$provider.com',
+          res['fullName'] ?? 'User $provider',
+          token: res['token'],
+          profileImageUrl: res['profileImageUrl'],
+        );
         _finishAuth('เข้าสู่ระบบผ่าน $provider สำเร็จ');
       } else {
         throw Exception('ไม่ได้รับข้อมูลจากเซิร์ฟเวอร์');
@@ -159,7 +193,10 @@ class _AuthPageState extends State<AuthPage> {
       Logger.catchBlock('AuthPage', 'socialLogin($provider)', e, st);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาลองใหม่'), backgroundColor: Colors.red),
+          const SnackBar(
+            content: Text('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาลองใหม่'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } finally {
@@ -177,16 +214,26 @@ class _AuthPageState extends State<AuthPage> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Row(
           children: [
-            Icon(Icons.g_mobiledata_rounded, color: Color(0xFFEA4335), size: 32),
+            Icon(
+              Icons.g_mobiledata_rounded,
+              color: Color(0xFFEA4335),
+              size: 32,
+            ),
             SizedBox(width: 8),
-            Text('Google Sign-In', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            Text(
+              'Google Sign-In',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
           ],
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('ระบุอีเมล Google ของคุณเพื่อเข้าสู่ระบบกับเซิร์ฟเวอร์:', style: TextStyle(fontSize: 13)),
+            const Text(
+              'ระบุอีเมล Google ของคุณเพื่อเข้าสู่ระบบกับเซิร์ฟเวอร์:',
+              style: TextStyle(fontSize: 13),
+            ),
             const SizedBox(height: 14),
             TextField(
               controller: emailController,
@@ -194,7 +241,9 @@ class _AuthPageState extends State<AuthPage> {
               decoration: InputDecoration(
                 labelText: 'Google Email',
                 prefixIcon: const Icon(Icons.email_outlined),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
             const SizedBox(height: 10),
@@ -203,7 +252,9 @@ class _AuthPageState extends State<AuthPage> {
               decoration: InputDecoration(
                 labelText: 'ชื่อแสดงผล (Full Name)',
                 prefixIcon: const Icon(Icons.person_outline),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
           ],
@@ -217,14 +268,18 @@ class _AuthPageState extends State<AuthPage> {
             onPressed: () {
               final email = emailController.text.trim();
               if (email.isEmpty) return;
-              final name = nameController.text.trim().isNotEmpty ? nameController.text.trim() : email.split('@').first;
+              final name = nameController.text.trim().isNotEmpty
+                  ? nameController.text.trim()
+                  : email.split('@').first;
               final id = 'google_${email.hashCode.abs()}';
               Navigator.pop(ctx, {'id': id, 'email': email, 'name': name});
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFEA4335),
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
             child: const Text('ตกลง'),
           ),
@@ -270,19 +325,30 @@ class _AuthPageState extends State<AuthPage> {
                       ),
                     ],
                   ),
-                  child: const Icon(Icons.auto_awesome, color: Colors.white, size: 36),
+                  child: const Icon(
+                    Icons.auto_awesome,
+                    color: Colors.white,
+                    size: 36,
+                  ),
                 ),
                 const SizedBox(height: 20),
-                Text('Mylife',
-                    style: TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: -1,
-                        color: c.ink)),
+                Text(
+                  'Mylife',
+                  style: TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -1,
+                    color: c.ink,
+                  ),
+                ),
                 const SizedBox(height: 6),
                 Text(
                   isLogin ? 'ยินดีต้อนรับกลับมา' : 'สร้างบัญชีใหม่',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: c.ink3),
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                    color: c.ink3,
+                  ),
                 ),
                 SizedBox(height: size.height * 0.04),
 
@@ -349,13 +415,26 @@ class _AuthPageState extends State<AuthPage> {
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.transparent,
                             shadowColor: Colors.transparent,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
                           ),
                           child: isLoading
-                              ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                              ? const SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2.5,
+                                  ),
+                                )
                               : Text(
                                   isLogin ? 'เข้าสู่ระบบ' : 'ลงทะเบียน',
-                                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white),
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white,
+                                  ),
                                 ),
                         ),
                       ),
@@ -367,7 +446,14 @@ class _AuthPageState extends State<AuthPage> {
                           Expanded(child: Divider(color: c.border)),
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 14),
-                            child: Text('หรือ', style: TextStyle(color: c.ink3, fontSize: 13, fontWeight: FontWeight.w500)),
+                            child: Text(
+                              'หรือ',
+                              style: TextStyle(
+                                color: c.ink3,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
                           ),
                           Expanded(child: Divider(color: c.border)),
                         ],
@@ -384,7 +470,9 @@ class _AuthPageState extends State<AuthPage> {
                       ),
                       const SizedBox(height: 10),
                       _socialButton(
-                        onPressed: isLoading ? null : () => _socialLogin('LINE'),
+                        onPressed: isLoading
+                            ? null
+                            : () => _socialLogin('LINE'),
                         icon: Icons.chat_bubble_rounded,
                         label: 'เข้าสู่ระบบด้วย LINE',
                         iconColor: const Color(0xFF00C300),
@@ -406,8 +494,13 @@ class _AuthPageState extends State<AuthPage> {
                         style: TextStyle(color: c.ink3, fontSize: 14),
                         children: [
                           TextSpan(
-                            text: isLogin ? 'ลงทะเบียนที่นี่' : 'เข้าสู่ระบบที่นี่',
-                            style: TextStyle(color: c.accent, fontWeight: FontWeight.w700),
+                            text: isLogin
+                                ? 'ลงทะเบียนที่นี่'
+                                : 'เข้าสู่ระบบที่นี่',
+                            style: TextStyle(
+                              color: c.accent,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ],
                       ),
@@ -453,7 +546,10 @@ class _AuthPageState extends State<AuthPage> {
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(color: c.accent, width: 2),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
       ),
     );
   }
@@ -475,10 +571,19 @@ class _AuthPageState extends State<AuthPage> {
       child: OutlinedButton.icon(
         onPressed: onPressed,
         icon: Icon(icon, size: 24, color: iconColor),
-        label: Text(label, style: TextStyle(color: c.ink, fontWeight: FontWeight.w600, fontSize: 14)),
+        label: Text(
+          label,
+          style: TextStyle(
+            color: c.ink,
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+          ),
+        ),
         style: OutlinedButton.styleFrom(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           side: BorderSide.none,
         ),
       ),

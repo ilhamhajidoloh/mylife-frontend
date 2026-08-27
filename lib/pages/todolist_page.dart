@@ -67,7 +67,9 @@ class _TodolistPageState extends State<TodolistPage> {
         userId,
         tag: _selectedTag,
         year: _selectedView == 'ทั้งหมด' ? null : _viewAnchor.year,
-        month: (_selectedView == 'ปี' || _selectedView == 'ทั้งหมด') ? null : _viewAnchor.month,
+        month: (_selectedView == 'ปี' || _selectedView == 'ทั้งหมด')
+            ? null
+            : _viewAnchor.month,
         day: _selectedView == 'วัน' ? _viewAnchor.day : null,
       );
       if (list != null && list is List) {
@@ -469,6 +471,7 @@ class _TodolistPageState extends State<TodolistPage> {
           ],
         ),
         child: FloatingActionButton.extended(
+          heroTag: 'fab_todolist',
           onPressed: () => _openTodoModal(),
           icon: const Icon(Icons.add_rounded, color: Colors.white),
           label: const Text(
@@ -593,8 +596,12 @@ class _TodolistPageState extends State<TodolistPage> {
                             borderRadius: BorderRadius.circular(10),
                             child: LinearProgressIndicator(
                               value: _completionPercentage.clamp(0.0, 1.0),
-                              backgroundColor: Colors.white.withValues(alpha: 0.2),
-                              valueColor: const AlwaysStoppedAnimation(Color(0xFF4ADE80)),
+                              backgroundColor: Colors.white.withValues(
+                                alpha: 0.2,
+                              ),
+                              valueColor: const AlwaysStoppedAnimation(
+                                Color(0xFF4ADE80),
+                              ),
                               minHeight: 6,
                             ),
                           ),
@@ -613,11 +620,15 @@ class _TodolistPageState extends State<TodolistPage> {
                   color: c.surface,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: isDark ? c.border.withValues(alpha: 0.8) : c.border.withValues(alpha: 0.6),
+                    color: isDark
+                        ? c.border.withValues(alpha: 0.8)
+                        : c.border.withValues(alpha: 0.6),
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: isDark ? Colors.black.withValues(alpha: 0.2) : c.ink.withValues(alpha: 0.03),
+                      color: isDark
+                          ? Colors.black.withValues(alpha: 0.2)
+                          : c.ink.withValues(alpha: 0.03),
                       blurRadius: 14,
                       offset: const Offset(0, 4),
                     ),
@@ -636,10 +647,14 @@ class _TodolistPageState extends State<TodolistPage> {
                               duration: const Duration(milliseconds: 200),
                               padding: const EdgeInsets.symmetric(vertical: 8),
                               decoration: BoxDecoration(
-                                color: isSel ? c.accentSoft : Colors.transparent,
+                                color: isSel
+                                    ? c.accentSoft
+                                    : Colors.transparent,
                                 borderRadius: BorderRadius.circular(12),
                                 border: isSel
-                                    ? Border.all(color: c.accent.withValues(alpha: 0.25))
+                                    ? Border.all(
+                                        color: c.accent.withValues(alpha: 0.25),
+                                      )
                                     : null,
                               ),
                               child: Text(
@@ -647,7 +662,9 @@ class _TodolistPageState extends State<TodolistPage> {
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   fontSize: 12.5,
-                                  fontWeight: isSel ? FontWeight.w800 : FontWeight.w600,
+                                  fontWeight: isSel
+                                      ? FontWeight.w800
+                                      : FontWeight.w600,
                                   color: isSel ? c.accent : c.ink3,
                                 ),
                               ),
@@ -669,7 +686,11 @@ class _TodolistPageState extends State<TodolistPage> {
                                 color: c.surface2,
                                 borderRadius: BorderRadius.circular(10),
                               ),
-                              child: Icon(Icons.chevron_left_rounded, color: c.ink2, size: 18),
+                              child: Icon(
+                                Icons.chevron_left_rounded,
+                                color: c.ink2,
+                                size: 18,
+                              ),
                             ),
                           ),
                           Text(
@@ -688,7 +709,11 @@ class _TodolistPageState extends State<TodolistPage> {
                                 color: c.surface2,
                                 borderRadius: BorderRadius.circular(10),
                               ),
-                              child: Icon(Icons.chevron_right_rounded, color: c.ink2, size: 18),
+                              child: Icon(
+                                Icons.chevron_right_rounded,
+                                color: c.ink2,
+                                size: 18,
+                              ),
                             ),
                           ),
                         ],
@@ -783,7 +808,10 @@ class _TodolistPageState extends State<TodolistPage> {
                                   final completionDate = _selectedView == 'วัน'
                                       ? _viewAnchor
                                       : (item['targetDate'] != null
-                                            ? (DateTime.tryParse(item['targetDate']) ?? _viewAnchor)
+                                            ? (DateTime.tryParse(
+                                                    item['targetDate'],
+                                                  ) ??
+                                                  _viewAnchor)
                                             : _viewAnchor);
                                   await TodoApiService.updateCompletion(
                                     item['id'],
@@ -896,7 +924,12 @@ class _TodolistPageState extends State<TodolistPage> {
     );
   }
 
-  Widget _buildTagChip(String label, String icon, bool isSelected, Color color) {
+  Widget _buildTagChip(
+    String label,
+    String icon,
+    bool isSelected,
+    Color color,
+  ) {
     final c = context.c;
 
     return Padding(
