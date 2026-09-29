@@ -117,7 +117,12 @@ class ApiConfig {
       '$baseUrl/api/line/$userId/connect';
   static String lineDisconnect(String userId) =>
       '$baseUrl/api/line/$userId/disconnect';
+  static String lineTest(String userId) => '$baseUrl/api/line/$userId/test';
 
   static String notification(String userId) =>
       '$baseUrl/api/notification/$userId';
+
+  static String emailPreferences(String userId) =>
+      '$baseUrl/api/emailnotification/$userId/preferences';
+  static String emailTest(String userId) => '$baseUrl/api/emailnotification/$userId/test';
 }

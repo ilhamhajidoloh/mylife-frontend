@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'theme/app_theme.dart';
 import 'widgets/common.dart';
@@ -134,6 +135,9 @@ class _HomeShellState extends State<HomeShell> {
   String _userName = 'โปรไฟล์';
   String? _profileImageUrl;
   bool _isOnline = true;
+  bool _plannerEnabled = true;
+  bool _financeEnabled = true;
+  bool _todosEnabled = true;
   StreamSubscription<bool>? _connectivitySubscription;
 
   static const _pages = <Widget>[
@@ -185,6 +189,18 @@ class _HomeShellState extends State<HomeShell> {
       }
     });
     _checkInitialLogin();
+    _loadModuleVisibility();
+  }
+
+  Future<void> _loadModuleVisibility() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _plannerEnabled = prefs.getBool('module_planner') ?? true;
+      _financeEnabled = prefs.getBool('module_finance') ?? true;
+      _todosEnabled = prefs.getBool('module_todos') ?? true;
+      if ((_index == 1 && !_plannerEnabled) || (_index == 2 && !_financeEnabled) || (_index == 3 && !_todosEnabled)) _index = 0;
+    });
   }
 
   @override
@@ -245,7 +261,10 @@ class _HomeShellState extends State<HomeShell> {
       context,
       PageRouteBuilder(
         pageBuilder: (_, _, _) => ProfilePage(
-          onProfileUpdated: _checkInitialLogin,
+          onProfileUpdated: () {
+            _checkInitialLogin();
+            _loadModuleVisibility();
+          },
           onLogout: _checkInitialLogin,
         ),
         transitionsBuilder: (_, anim, _, child) => SlideTransition(
@@ -581,7 +600,7 @@ class _HomeShellState extends State<HomeShell> {
                 // Tab 0: วันนี้
                 _buildNavItem(0, labels[0], _icons[0], _iconsOut[0], c, small),
                 // Tab 1: แผนงาน
-                _buildNavItem(1, labels[1], _icons[1], _iconsOut[1], c, small),
+                if (_plannerEnabled) _buildNavItem(1, labels[1], _icons[1], _iconsOut[1], c, small),
 
                 // Center Action Button (+)
                 Expanded(
@@ -629,9 +648,9 @@ class _HomeShellState extends State<HomeShell> {
                 ),
 
                 // Tab 2: การเงิน
-                _buildNavItem(2, labels[2], _icons[2], _iconsOut[2], c, small),
+                if (_financeEnabled) _buildNavItem(2, labels[2], _icons[2], _iconsOut[2], c, small),
                 // Tab 3: สิ่งที่ต้องทำ
-                _buildNavItem(3, labels[3], _icons[3], _iconsOut[3], c, small),
+                if (_todosEnabled) _buildNavItem(3, labels[3], _icons[3], _iconsOut[3], c, small),
               ],
             ),
           ),

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
@@ -12,6 +13,7 @@ import '../services/cache_service.dart';
 import '../services/logger.dart';
 import '../services/notification_service.dart';
 import '../services/data_event_service.dart';
+import '../services/finance_export_service.dart';
 import 'books_management_page.dart';
 
 class FinancePage extends StatefulWidget {
@@ -30,6 +32,7 @@ class _FinancePageState extends State<FinancePage> {
   bool _isLowBalance = false;
 
   List<dynamic> _transactions = [];
+  String _transactionSearch = '';
   List<dynamic> _top5Expenses = [];
   List<dynamic> _remainingExpenses = [];
 
@@ -103,6 +106,81 @@ class _FinancePageState extends State<FinancePage> {
       context,
       MaterialPageRoute(builder: (context) => const BooksManagementPage()),
     ).then((_) => _loadBooks());
+  }
+
+  List<dynamic> get _visibleTransactions {
+    final q = _transactionSearch.trim().toLowerCase();
+    if (q.isEmpty) return _transactions;
+    return _transactions.where((t) => '${t['note'] ?? ''} ${t['category'] ?? ''}'.toLowerCase().contains(q)).toList();
+  }
+
+  Future<void> _openExportSheet() async {
+    var scope = FinanceExportScope.month;
+    var selectedMonth = DateTime.now();
+    var selectedYear = DateTime.now().year;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('ส่งออกรายรับ-รายจ่าย', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 8),
+              const Text('เลือกช่วงเวลาและรูปแบบไฟล์ แล้วแชร์หรือบันทึกไฟล์จากหน้าต่างถัดไป'),
+              const SizedBox(height: 16),
+              SegmentedButton<FinanceExportScope>(
+                segments: const [
+                  ButtonSegment(value: FinanceExportScope.month, label: Text('เดือน')),
+                  ButtonSegment(value: FinanceExportScope.year, label: Text('ปี')),
+                  ButtonSegment(value: FinanceExportScope.all, label: Text('ทั้งหมด')),
+                ],
+                selected: {scope},
+                onSelectionChanged: (value) => setSheetState(() => scope = value.first),
+              ),
+              if (scope == FinanceExportScope.month) ...[
+                const SizedBox(height: 12),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.calendar_month_rounded),
+                  title: Text(DateFormat('MMMM yyyy', 'th_TH').format(selectedMonth)),
+                  onTap: () async {
+                    final picked = await showDatePicker(context: context, initialDate: selectedMonth, firstDate: DateTime(2000), lastDate: DateTime(2100));
+                    if (picked != null) setSheetState(() => selectedMonth = picked);
+                  },
+                ),
+              ],
+              if (scope == FinanceExportScope.year) ...[
+                const SizedBox(height: 12),
+                DropdownButtonFormField<int>(
+                  value: selectedYear,
+                  decoration: const InputDecoration(labelText: 'ปี'),
+                  items: List.generate(11, (i) => DateTime.now().year - 5 + i).map((year) => DropdownMenuItem(value: year, child: Text('${year + 543}'))).toList(),
+                  onChanged: (value) => setSheetState(() => selectedYear = value ?? selectedYear),
+                ),
+              ],
+              const SizedBox(height: 16),
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                for (final format in FinanceExportFormat.values)
+                  FilledButton.icon(
+                    icon: Icon(switch (format) { FinanceExportFormat.csv => Icons.table_chart_outlined, FinanceExportFormat.excel => Icons.grid_on_rounded, FinanceExportFormat.pdf => Icons.picture_as_pdf_rounded }),
+                    label: Text(switch (format) { FinanceExportFormat.csv => 'CSV', FinanceExportFormat.excel => 'Excel', FinanceExportFormat.pdf => 'PDF' }),
+                    onPressed: () async {
+                      Navigator.pop(sheetContext);
+                      try {
+                        await FinanceExportService.exportAndShare(transactions: _transactions, format: format, scope: scope, selectedMonth: selectedMonth, selectedYear: selectedYear);
+                      } catch (_) {
+                        if (mounted) ScaffoldMessenger.of(this.context).showSnackBar(const SnackBar(content: Text('ส่งออกไฟล์ไม่สำเร็จ')));
+                      }
+                    },
+                  ),
+              ]),
+            ]),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -1355,9 +1433,14 @@ class _FinancePageState extends State<FinancePage> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
           children: [
-            const PageHeader(
+            PageHeader(
               title: 'รายรับรายจ่าย',
               subtitle: 'จัดการการเงินของคุณ',
+              trailing: IconButton(
+                tooltip: 'ส่งออกข้อมูล',
+                onPressed: _transactions.isEmpty ? null : _openExportSheet,
+                icon: const Icon(Icons.ios_share_rounded),
+              ),
             ),
             const SizedBox(height: 16),
 
@@ -1371,6 +1454,15 @@ class _FinancePageState extends State<FinancePage> {
               ),
               const SizedBox(height: 16),
             ],
+            TextField(
+              onChanged: (value) => setState(() => _transactionSearch = value),
+              decoration: InputDecoration(
+                hintText: 'ค้นหารายการหรือหมวดหมู่',
+                prefixIcon: const Icon(Icons.search_rounded),
+                suffixIcon: _transactionSearch.isEmpty ? null : IconButton(icon: const Icon(Icons.clear_rounded), onPressed: () => setState(() => _transactionSearch = '')),
+              ),
+            ),
+            const SizedBox(height: 16),
 
             if (_isLowBalance)
               Container(
@@ -1745,10 +1837,10 @@ class _FinancePageState extends State<FinancePage> {
               SectionCard(
                 title: 'ธุรกรรมล่าสุด',
                 icon: Icons.receipt_long_rounded,
-                child: _transactions.isNotEmpty
+                child: _visibleTransactions.isNotEmpty
                     ? Column(
                         children: [
-                          for (var t in _transactions.take(10)) ...[
+                          for (var t in _visibleTransactions.take(10)) ...[
                             GestureDetector(
                               onTap: () => _openTransactionModal(t),
                               behavior: HitTestBehavior.opaque,
@@ -1822,7 +1914,7 @@ class _FinancePageState extends State<FinancePage> {
                                 ),
                               ),
                             ),
-                            if (t != _transactions.take(10).last)
+                            if (t != _visibleTransactions.take(10).last)
                               Divider(
                                 height: 1,
                                 color: c.border.withValues(alpha: 0.5),

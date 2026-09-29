@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
 import '../services/api_services.dart';
 import '../services/user_session.dart';
@@ -42,6 +44,18 @@ class _ProfilePageState extends State<ProfilePage>
   bool _googleConnected = false;
   bool _lineConnected = false;
   String? _lineUserId;
+  bool _emailEnabled = true;
+  bool _emailClassReminders = true;
+  bool _emailEventReminders = true;
+  bool _emailTaskReminders = true;
+  bool _emailBillReminders = true;
+  bool _isSavingEmail = false;
+  final _recipientEmailController = TextEditingController();
+  final Map<String, bool> _modules = {
+    'planner': true,
+    'finance': true,
+    'todos': true,
+  };
 
   late final AnimationController _animCtrl;
   late final Animation<double> _fadeAnim;
@@ -64,6 +78,7 @@ class _ProfilePageState extends State<ProfilePage>
     _currentPasswordController.dispose();
     _newPasswordController.dispose();
     _confirmPasswordController.dispose();
+    _recipientEmailController.dispose();
     super.dispose();
   }
 
@@ -82,7 +97,71 @@ class _ProfilePageState extends State<ProfilePage>
       _animCtrl.forward();
     }
 
-    await Future.wait([_fetchUserProfile(), _fetchIntegrations()]);
+    await Future.wait([_fetchUserProfile(), _fetchIntegrations(), _loadEmailPreferences(), _loadModules()]);
+  }
+
+  Future<void> _loadEmailPreferences() async {
+    try {
+      final value = await EmailNotificationApiService.getPreferences(_userId);
+      if (value is Map && mounted) {
+        setState(() {
+          _emailEnabled = value['enabled'] != false;
+          _recipientEmailController.text = '${value['recipientEmail'] ?? _email}';
+          _emailClassReminders = value['classReminders'] != false;
+          _emailEventReminders = value['eventReminders'] != false;
+          _emailTaskReminders = value['taskReminders'] != false;
+          _emailBillReminders = value['billReminders'] != false;
+        });
+      }
+    } catch (_) {
+      _recipientEmailController.text = _email;
+    }
+  }
+
+  Future<void> _saveEmailPreferences() async {
+    setState(() => _isSavingEmail = true);
+    try {
+      await EmailNotificationApiService.updatePreferences(_userId,
+        enabled: _emailEnabled, recipientEmail: _recipientEmailController.text.trim(),
+        classReminders: _emailClassReminders, classReminderMinutes: 15,
+        eventReminders: _emailEventReminders, taskReminders: _emailTaskReminders, billReminders: _emailBillReminders);
+      _showMessage('บันทึกการแจ้งเตือนทางอีเมลแล้ว');
+    } catch (_) {
+      _showMessage('บันทึกการแจ้งเตือนทางอีเมลไม่สำเร็จ');
+    } finally {
+      if (mounted) setState(() => _isSavingEmail = false);
+    }
+  }
+
+  Future<void> _sendEmailTest() async {
+    try {
+      await EmailNotificationApiService.sendTest(_userId);
+      _showMessage('ส่งอีเมลทดสอบแล้ว');
+    } catch (_) {
+      _showMessage('ส่งอีเมลทดสอบไม่สำเร็จ กรุณาตรวจการตั้งค่า SMTP');
+    }
+  }
+
+  Future<void> _sendLineTest() async {
+    try {
+      await LineApiService.sendTest(_userId);
+      _showMessage('ส่งข้อความทดสอบไปยัง LINE แล้ว');
+    } catch (_) {
+      _showMessage('ส่งข้อความ LINE ไม่สำเร็จ');
+    }
+  }
+
+  Future<void> _loadModules() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() { for (final key in _modules.keys) { _modules[key] = prefs.getBool('module_$key') ?? true; } });
+  }
+
+  Future<void> _setModule(String key, bool value) async {
+    setState(() => _modules[key] = value);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('module_$key', value);
+    widget.onProfileUpdated?.call();
   }
 
   Future<void> _fetchUserProfile() async {
@@ -159,6 +238,51 @@ class _ProfilePageState extends State<ProfilePage>
     }
   }
 
+  Future<void> _deleteProfileImage() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('ลบรูปโปรไฟล์'),
+        content: const Text('ต้องการลบรูปโปรไฟล์ปัจจุบันใช่หรือไม่?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('ยกเลิก')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('ลบ')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      setState(() => _isUploadingImage = true);
+      await AuthApiService.deleteProfileImage();
+      await UserSession.saveProfileImageUrl(null);
+      if (mounted) {
+        setState(() {
+          _profileImageUrl = null;
+          _isUploadingImage = false;
+        });
+        widget.onProfileUpdated?.call();
+        _showMessage('ลบรูปโปรไฟล์แล้ว');
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isUploadingImage = false);
+        _showMessage('ลบรูปโปรไฟล์ไม่สำเร็จ');
+      }
+    }
+  }
+
+  Future<void> _showAvatarActions() async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      builder: (_) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        ListTile(leading: const Icon(Icons.photo_library_outlined), title: const Text('เปลี่ยนรูปโปรไฟล์'), onTap: () => Navigator.pop(context, 'upload')),
+        ListTile(leading: const Icon(Icons.delete_outline_rounded), title: const Text('ลบรูปโปรไฟล์'), onTap: () => Navigator.pop(context, 'delete')),
+      ])),
+    );
+    if (action == 'upload') await _pickAndUploadImage();
+    if (action == 'delete') await _deleteProfileImage();
+  }
+
   Future<void> _saveProfile() async {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
@@ -220,13 +344,15 @@ class _ProfilePageState extends State<ProfilePage>
   Future<void> _toggleGoogleCalendar(bool value) async {
     if (value) {
       try {
-        final now = DateTime.now().add(const Duration(days: 30));
-        await GoogleCalendarApiService.upsertConnection(
-          _userId,
-          'sample_access_token',
-          'sample_refresh_token',
-          now,
+        const webClientId = '1015105923446-9bm732p3tdsmqgtl9okpj9j73290n5tp.apps.googleusercontent.com';
+        final google = GoogleSignIn(
+          serverClientId: webClientId,
+          scopes: const ['email', 'https://www.googleapis.com/auth/calendar.events'],
         );
+        final account = await google.signIn();
+        final code = account?.serverAuthCode;
+        if (code == null || code.isEmpty) throw Exception('ไม่ได้รับ authorization code จาก Google');
+        await GoogleCalendarApiService.connectWithAuthCode(_userId, code, '');
         _showMessage('เชื่อมต่อ Google Calendar เรียบร้อยแล้ว');
         _fetchIntegrations();
       } catch (_) {
@@ -424,6 +550,22 @@ class _ProfilePageState extends State<ProfilePage>
                     ),
 
                     const SizedBox(height: 16),
+                    _buildSectionCard(
+                      c,
+                      icon: Icons.email_outlined,
+                      title: 'การแจ้งเตือนทางอีเมล',
+                      child: _buildEmailSettings(c),
+                    ),
+
+                    const SizedBox(height: 16),
+                    _buildSectionCard(
+                      c,
+                      icon: Icons.tune_rounded,
+                      title: 'ฟังก์ชันที่แสดงในแอป',
+                      child: _buildModuleSettings(c),
+                    ),
+
+                    const SizedBox(height: 16),
 
                     // ── 5. Quick Links ─────────────────────────────────────
                     _buildQuickLinks(c),
@@ -543,7 +685,7 @@ class _ProfilePageState extends State<ProfilePage>
                 bottom: 0,
                 right: 0,
                 child: GestureDetector(
-                  onTap: _isUploadingImage ? null : _pickAndUploadImage,
+                  onTap: _isUploadingImage ? null : _showAvatarActions,
                   child: Container(
                     width: 32,
                     height: 32,
@@ -849,8 +991,44 @@ class _ProfilePageState extends State<ProfilePage>
           value: _lineConnected,
           onChanged: _toggleLine,
         ),
+        if (_lineConnected)
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: _sendLineTest,
+              icon: const Icon(Icons.send_outlined),
+              label: const Text('ทดสอบข้อความ LINE'),
+            ),
+          ),
       ],
     );
+  }
+
+  Widget _buildEmailSettings(AppColors c) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      TextField(controller: _recipientEmailController, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'อีเมลผู้รับ', prefixIcon: Icon(Icons.alternate_email_rounded))),
+      const SizedBox(height: 8),
+      SwitchListTile.adaptive(contentPadding: EdgeInsets.zero, title: const Text('เปิดการแจ้งเตือนทางอีเมล'), value: _emailEnabled, onChanged: (v) => setState(() => _emailEnabled = v)),
+      SwitchListTile.adaptive(contentPadding: EdgeInsets.zero, title: const Text('แจ้งเตือนคาบเรียน'), value: _emailClassReminders, onChanged: _emailEnabled ? (v) => setState(() => _emailClassReminders = v) : null),
+      SwitchListTile.adaptive(contentPadding: EdgeInsets.zero, title: const Text('แจ้งเตือนกิจกรรม'), value: _emailEventReminders, onChanged: _emailEnabled ? (v) => setState(() => _emailEventReminders = v) : null),
+      SwitchListTile.adaptive(contentPadding: EdgeInsets.zero, title: const Text('แจ้งเตือนงาน'), value: _emailTaskReminders, onChanged: _emailEnabled ? (v) => setState(() => _emailTaskReminders = v) : null),
+      SwitchListTile.adaptive(contentPadding: EdgeInsets.zero, title: const Text('แจ้งเตือนรายจ่ายประจำ'), value: _emailBillReminders, onChanged: _emailEnabled ? (v) => setState(() => _emailBillReminders = v) : null),
+      Wrap(alignment: WrapAlignment.end, spacing: 8, children: [
+        OutlinedButton.icon(onPressed: _isSavingEmail ? null : _sendEmailTest, icon: const Icon(Icons.send_outlined), label: const Text('ทดสอบ')),
+        FilledButton.icon(onPressed: _isSavingEmail ? null : _saveEmailPreferences, icon: _isSavingEmail ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.save_outlined), label: const Text('บันทึก')),
+      ]),
+    ]);
+  }
+
+  Widget _buildModuleSettings(AppColors c) {
+    const labels = {'planner': 'ตารางเรียน กิจกรรม และงาน', 'finance': 'การเงิน', 'todos': 'To-do list'};
+    return Column(children: labels.entries.map((entry) => SwitchListTile.adaptive(
+      contentPadding: EdgeInsets.zero,
+      title: Text(entry.value),
+      subtitle: const Text('ซ่อนหรือแสดงจากเมนูหลัก'),
+      value: _modules[entry.key] ?? true,
+      onChanged: (value) => _setModule(entry.key, value),
+    )).toList());
   }
 
   // ─── Quick Links ──────────────────────────────────────────────────────────

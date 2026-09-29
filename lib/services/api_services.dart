@@ -61,6 +61,10 @@ class AuthApiService {
     final url = '${ApiConfig.authProfileImage}/$userId';
     return await ApiClient.uploadFile(url, imageFile.path, 'image');
   }
+
+  static Future<dynamic> deleteProfileImage() async {
+    return await ApiClient.delete(ApiConfig.authProfileImage);
+  }
 }
 
 class FinanceApiService {
@@ -581,12 +585,45 @@ class LineApiService {
   static Future<dynamic> disconnect(String userId) async {
     return await ApiClient.post(ApiConfig.lineDisconnect(userId), {});
   }
+
+  static Future<dynamic> sendTest(String userId) =>
+      ApiClient.post(ApiConfig.lineTest(userId), {});
 }
 
 class NotificationApiService {
   static Future<dynamic> getNotifications(String userId) async {
     return await ApiClient.get(ApiConfig.notification(userId));
   }
+}
+
+class EmailNotificationApiService {
+  static Future<dynamic> getPreferences(String userId) async {
+    return ApiClient.get(ApiConfig.emailPreferences(userId));
+  }
+
+  static Future<dynamic> updatePreferences(
+    String userId, {
+    required bool enabled,
+    required String recipientEmail,
+    required bool classReminders,
+    required int classReminderMinutes,
+    required bool eventReminders,
+    required bool taskReminders,
+    required bool billReminders,
+  }) async {
+    return ApiClient.put(ApiConfig.emailPreferences(userId), {
+      'enabled': enabled,
+      'recipientEmail': recipientEmail,
+      'classReminders': classReminders,
+      'classReminderMinutes': classReminderMinutes,
+      'eventReminders': eventReminders,
+      'taskReminders': taskReminders,
+      'billReminders': billReminders,
+    });
+  }
+
+  static Future<dynamic> sendTest(String userId) =>
+      ApiClient.post(ApiConfig.emailTest(userId), {});
 }
 
 class BookApiService {

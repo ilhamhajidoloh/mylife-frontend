@@ -7,7 +7,10 @@ plugins {
 
 android {
     namespace = "com.example.front_mylife"
-    compileSdk = flutter.compileSdkVersion
+    // file_picker / flutter_plugin_android_lifecycle require Android API 36.
+    // targetSdk remains Flutter-managed so this does not opt into new runtime
+    // behaviour unexpectedly.
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

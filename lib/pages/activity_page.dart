@@ -9,10 +9,13 @@ import '../services/cache_service.dart';
 import '../services/logger.dart';
 import '../services/data_event_service.dart';
 import '../services/notification_service.dart';
+import '../services/calendar_file_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart'
     show DateTimeComponents;
 
 enum ActivityTimeType { timed, allDay, multiDay, noDate, recurring }
+
+enum ActivityTimelineStatus { upcoming, ongoing, completed, unscheduled }
 
 class ActivityPage extends StatefulWidget {
   const ActivityPage({super.key});
@@ -24,7 +27,9 @@ class ActivityPage extends StatefulWidget {
 class _ActivityPageState extends State<ActivityPage> {
   bool _isLoading = true;
   List<dynamic> _activities = [];
+  String _searchQuery = '';
   Map<String, dynamic>? _timeline;
+  int _activityTimelineTab = 0;
 
   late Timer _timer;
   Duration _remainingTime = Duration.zero;
@@ -55,9 +60,9 @@ class _ActivityPageState extends State<ActivityPage> {
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) {
         setState(() {
-          if (_timeline != null &&
-              _timeline!['next'] != null &&
-              _timeline!['next']['startTime'] != null) {
+          if (_timeline?['current'] != null ||
+              (_timeline?['next'] != null &&
+                  _timeline!['next']['startTime'] != null)) {
             _updateRemainingTime();
           } else if (_remainingTime.inSeconds > 0) {
             _remainingTime -= const Duration(seconds: 1);
@@ -122,6 +127,51 @@ class _ActivityPageState extends State<ActivityPage> {
       Logger.catchBlock('ActivityPage', 'loadActivities', e, st);
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _exportCalendar() async {
+    try {
+      await CalendarFileService.exportAndShare(_activities);
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ส่งออกปฏิทินไม่สำเร็จ')));
+    }
+  }
+
+  Future<void> _exportActivitiesPdf() async {
+    try { await CalendarFileService.exportPdfAndShare(_visibleActivities); }
+    catch (_) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ส่งออก PDF ไม่สำเร็จ'))); }
+  }
+
+  List<dynamic> get _visibleActivities {
+    final query = _searchQuery.trim().toLowerCase();
+    if (query.isEmpty) return _activities;
+    return _activities.where((item) => ('${item['title'] ?? ''} ${item['description'] ?? ''} ${item['location'] ?? ''}').toLowerCase().contains(query)).toList();
+  }
+
+  Future<void> _importCalendar() async {
+    try {
+      final events = await CalendarFileService.pickAndParse();
+      if (events == null || events.isEmpty) return;
+      final userId = await UserSession.getUserId();
+      for (final event in events) {
+        await ActivityApiService.addActivity(
+          userId,
+          event.title,
+          event.description,
+          event.location,
+          event.allDay,
+          false,
+          false,
+          'ไม่ทำซ้ำ',
+          startTime: event.start,
+          endTime: event.end ?? event.start?.add(event.allDay ? const Duration(days: 1) : const Duration(hours: 1)),
+        );
+      }
+      await _loadActivities();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('นำเข้ากิจกรรม ${events.length} รายการแล้ว')));
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('นำเข้าปฏิทินไม่สำเร็จ')));
     }
   }
 
@@ -274,6 +324,50 @@ class _ActivityPageState extends State<ActivityPage> {
     final recurrence = _parseRecurrence(act['recurrence']);
     if (recurrence != 0) return ActivityTimeType.recurring;
     return ActivityTimeType.timed;
+  }
+
+  Duration _remainingForActivity(dynamic activity) {
+    final end = DateTime.tryParse(activity?['endTime']?.toString() ?? '')
+        ?.toLocal();
+    if (end == null) return Duration.zero;
+    final remaining = end.difference(DateTime.now());
+    return remaining.isNegative ? Duration.zero : remaining;
+  }
+
+  ActivityTimelineStatus _timelineStatus(dynamic act) {
+    if (_resolveTimeType(act) == ActivityTimeType.noDate) {
+      return ActivityTimelineStatus.unscheduled;
+    }
+
+    final start = DateTime.tryParse(act['startTime']?.toString() ?? '')
+        ?.toLocal();
+    if (start == null) return ActivityTimelineStatus.unscheduled;
+
+    final now = DateTime.now();
+    if (start.isAfter(now)) return ActivityTimelineStatus.upcoming;
+
+    final end = DateTime.tryParse(act['endTime']?.toString() ?? '')
+        ?.toLocal();
+    if (end != null && end.isAfter(now)) {
+      return ActivityTimelineStatus.ongoing;
+    }
+
+    return ActivityTimelineStatus.completed;
+  }
+
+  DateTime _timelineSortTime(dynamic act) =>
+      DateTime.tryParse(act['startTime']?.toString() ?? '')?.toLocal() ??
+      DateTime(9999);
+
+  List<dynamic> _activitiesForStatus(ActivityTimelineStatus status) {
+    final activities = _visibleActivities
+        .where((activity) => _timelineStatus(activity) == status)
+        .toList();
+    activities.sort((a, b) {
+      final compare = _timelineSortTime(a).compareTo(_timelineSortTime(b));
+      return status == ActivityTimelineStatus.completed ? -compare : compare;
+    });
+    return activities;
   }
 
   /// คำนวณ progress สำหรับกิจกรรมที่กำลังดำเนินการ (หลอดลดลงตามเวลาที่เหลือ)
@@ -1071,6 +1165,11 @@ class _ActivityPageState extends State<ActivityPage> {
   @override
   Widget build(BuildContext context) {
     final c = context.c;
+    final currentActivity = _timeline?['current'];
+    final featuredActivity = currentActivity ?? _timeline?['next'];
+    final featuredRemaining = currentActivity != null
+        ? _remainingForActivity(currentActivity)
+        : _remainingTime;
 
     return Scaffold(
       floatingActionButton: Container(
@@ -1102,9 +1201,32 @@ class _ActivityPageState extends State<ActivityPage> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
           children: [
-            const PageHeader(
+            PageHeader(
               title: 'กิจกรรม',
               subtitle: 'จัดการกิจกรรมและนับเวลาถอยหลัง',
+              trailing: PopupMenuButton<String>(
+                icon: const Icon(Icons.more_horiz_rounded),
+                onSelected: (value) {
+                  if (value == 'import') _importCalendar();
+                  else if (value == 'pdf') _exportActivitiesPdf();
+                  else _exportCalendar();
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'import', child: Text('นำเข้าไฟล์ .ics')),
+                  PopupMenuItem(value: 'export', child: Text('ส่งออกไฟล์ .ics')),
+                  PopupMenuItem(value: 'pdf', child: Text('ส่งออก PDF')),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            TextField(
+              onChanged: (value) => setState(() => _searchQuery = value),
+              decoration: InputDecoration(
+                hintText: 'ค้นหากิจกรรม สถานที่ หรือรายละเอียด',
+                prefixIcon: const Icon(Icons.search_rounded),
+                suffixIcon: _searchQuery.isEmpty ? null : IconButton(icon: const Icon(Icons.clear_rounded), onPressed: () => setState(() => _searchQuery = '')),
+              ),
             ),
             const SizedBox(height: 16),
 
@@ -1174,7 +1296,7 @@ class _ActivityPageState extends State<ActivityPage> {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            'LIVE COUNTDOWN',
+                            currentActivity != null ? 'LIVE NOW' : 'LIVE COUNTDOWN',
                             style: TextStyle(
                               fontSize: 11.5,
                               fontWeight: FontWeight.w900,
@@ -1187,7 +1309,7 @@ class _ActivityPageState extends State<ActivityPage> {
                     ),
                     const SizedBox(height: 18),
                     Text(
-                      _formatDuration(_remainingTime),
+                      _formatDuration(featuredRemaining),
                       style: const TextStyle(
                         fontSize: 44,
                         fontWeight: FontWeight.w900,
@@ -1198,7 +1320,7 @@ class _ActivityPageState extends State<ActivityPage> {
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      _timeline?['next']?['title']?.toString() ??
+                      featuredActivity?['title']?.toString() ??
                           'ไม่มีกิจกรรมถัดไป',
                       style: const TextStyle(
                         fontSize: 17,
@@ -1208,8 +1330,8 @@ class _ActivityPageState extends State<ActivityPage> {
                       ),
                       textAlign: TextAlign.center,
                     ),
-                    if (_timeline?['next']?['location'] != null &&
-                        _timeline!['next']['location'].toString().isNotEmpty)
+                    if (featuredActivity?['location'] != null &&
+                        featuredActivity!['location'].toString().isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(top: 6),
                         child: Container(
@@ -1231,7 +1353,7 @@ class _ActivityPageState extends State<ActivityPage> {
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                _timeline!['next']['location'].toString(),
+                                featuredActivity!['location'].toString(),
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
@@ -1244,11 +1366,13 @@ class _ActivityPageState extends State<ActivityPage> {
                       ),
                     // Progress Bar กิจกรรมถัดไป (นับในรอบ 30 วัน ถ้ายังไม่ถึงรอบ 30 วัน จะไม่แสดง)
                     () {
-                      final nextProgress = _calculateNextActivityProgress(
-                        _timeline?['next'],
-                        _remainingTime,
-                      );
-                      if (nextProgress == null) return const SizedBox.shrink();
+                      final progress = currentActivity != null
+                          ? _calculateOngoingProgress(currentActivity)
+                          : _calculateNextActivityProgress(
+                              _timeline?['next'],
+                              _remainingTime,
+                            );
+                      if (progress == null) return const SizedBox.shrink();
                       return Padding(
                         padding: const EdgeInsets.only(top: 18),
                         child: Column(
@@ -1258,7 +1382,9 @@ class _ActivityPageState extends State<ActivityPage> {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(
-                                  'นับถอยหลังรอบ 30 วัน',
+                                  currentActivity != null
+                                      ? 'เวลาที่เหลือ'
+                                      : 'นับถอยหลังรอบ 30 วัน',
                                   style: TextStyle(
                                     fontSize: 11.5,
                                     fontWeight: FontWeight.w600,
@@ -1266,7 +1392,7 @@ class _ActivityPageState extends State<ActivityPage> {
                                   ),
                                 ),
                                 Text(
-                                  '${(nextProgress * 100).toStringAsFixed(0)}%',
+                                  '${(progress * 100).toStringAsFixed(0)}%',
                                   style: const TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w900,
@@ -1279,7 +1405,7 @@ class _ActivityPageState extends State<ActivityPage> {
                             ClipRRect(
                               borderRadius: BorderRadius.circular(10),
                               child: LinearProgressIndicator(
-                                value: nextProgress,
+                                value: progress,
                                 backgroundColor: Colors.white.withValues(
                                   alpha: 0.22,
                                 ),
@@ -1298,17 +1424,8 @@ class _ActivityPageState extends State<ActivityPage> {
               ),
               const SizedBox(height: 20),
 
-              // Ongoing Activity (if any)
-              if (_timeline?['current'] != null) ...[
-                SectionCard(
-                  title: 'กำลังทำอยู่',
-                  child: _buildTimelineCard(
-                    _timeline!['current'],
-                    c.accent,
-                    Icons.play_circle_fill_rounded,
-                    isCurrent: true,
-                  ),
-                ),
+              if (currentActivity != null && _timeline?['next'] != null) ...[
+                _buildNextActivityPreview(_timeline!['next'], c),
                 const SizedBox(height: 16),
               ],
 
@@ -1328,14 +1445,9 @@ class _ActivityPageState extends State<ActivityPage> {
               // All Activities
               SectionCard(
                 title: 'กิจกรรมทั้งหมด',
-                caption: '${_activities.length} กิจกรรม',
-                child: _activities.isNotEmpty
-                    ? Column(
-                        children: [
-                          for (var act in _activities)
-                            _buildActivityTile(act, c),
-                        ],
-                      )
+                caption: '${_visibleActivities.length} กิจกรรม',
+                child: _visibleActivities.isNotEmpty
+                    ? _buildActivitiesTimeline(c)
                     : Padding(
                         padding: const EdgeInsets.all(24),
                         child: Center(
@@ -1349,6 +1461,76 @@ class _ActivityPageState extends State<ActivityPage> {
             ],
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildNextActivityPreview(dynamic activity, AppColors c) {
+    final start = DateTime.tryParse(activity['startTime']?.toString() ?? '')
+        ?.toLocal();
+    final remaining = start == null
+        ? null
+        : start.difference(DateTime.now());
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: c.blue.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: c.blue.withValues(alpha: 0.22)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: c.blue.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Icon(Icons.upcoming_rounded, color: c.blue, size: 20),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'กิจกรรมถัดไป',
+                  style: TextStyle(fontSize: 11, color: c.ink3),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  activity['title']?.toString() ?? '',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: c.ink,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (start != null)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  _formatDate(start),
+                  style: TextStyle(fontSize: 12, color: c.blue),
+                ),
+                if (remaining != null && !remaining.isNegative)
+                  Text(
+                    'อีก ${_formatDuration(remaining)}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: c.ink3,
+                    ),
+                  ),
+              ],
+            ),
+        ],
       ),
     );
   }
@@ -1463,6 +1645,150 @@ class _ActivityPageState extends State<ActivityPage> {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActivitiesTimeline(AppColors c) {
+    final groups = [
+      (
+        status: ActivityTimelineStatus.upcoming,
+        label: 'ยังไม่ถึง',
+        icon: Icons.schedule_rounded,
+        color: c.blue,
+      ),
+      (
+        status: ActivityTimelineStatus.ongoing,
+        label: 'กำลังดำเนินการ',
+        icon: Icons.play_circle_fill_rounded,
+        color: c.accent,
+      ),
+      (
+        status: ActivityTimelineStatus.completed,
+        label: 'ผ่านไปแล้ว',
+        icon: Icons.check_circle_rounded,
+        color: c.ink3,
+      ),
+      (
+        status: ActivityTimelineStatus.unscheduled,
+        label: 'ไม่ระบุวันเวลา',
+        icon: Icons.all_inclusive_rounded,
+        color: c.violet,
+      ),
+    ];
+
+    final selectedGroup = groups[_activityTimelineTab];
+    final selectedActivities = _activitiesForStatus(selectedGroup.status);
+
+    return DefaultTabController(
+      length: groups.length,
+      initialIndex: _activityTimelineTab,
+      child: Column(
+        children: [
+          TabBar(
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
+            onTap: (index) => setState(() => _activityTimelineTab = index),
+            labelColor: c.accent,
+            unselectedLabelColor: c.ink3,
+            indicatorColor: c.accent,
+            tabs: [
+              for (final group in groups)
+                Tab(text: '${group.label} (${_activitiesForStatus(group.status).length})'),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (selectedActivities.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Text(
+                'ไม่มี${selectedGroup.label}',
+                style: TextStyle(color: c.ink3),
+              ),
+            )
+          else
+            _buildTimelineGroup(
+              activities: selectedActivities,
+              label: selectedGroup.label,
+              icon: selectedGroup.icon,
+              color: selectedGroup.color,
+              c: c,
+              showHeader: false,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTimelineGroup({
+    required List<dynamic> activities,
+    required String label,
+    required IconData icon,
+    required Color color,
+    required AppColors c,
+    bool showHeader = true,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (showHeader) ...[
+            Row(
+              children: [
+                Icon(icon, size: 18, color: color),
+                const SizedBox(width: 7),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(width: 7),
+                Text(
+                  '${activities.length}',
+                  style: TextStyle(fontSize: 12, color: c.ink3),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+          ],
+          for (var index = 0; index < activities.length; index++)
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SizedBox(
+                    width: 30,
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 14,
+                          height: 14,
+                          decoration: BoxDecoration(
+                            color: color,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: c.surface, width: 3),
+                          ),
+                        ),
+                        if (index < activities.length - 1)
+                          Expanded(
+                            child: Container(
+                              width: 2,
+                              margin: const EdgeInsets.symmetric(vertical: 2),
+                              color: color.withValues(alpha: 0.35),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  Expanded(child: _buildActivityTile(activities[index], c)),
+                ],
+              ),
+            ),
         ],
       ),
     );

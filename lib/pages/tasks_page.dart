@@ -24,6 +24,7 @@ class _TasksPageState extends State<TasksPage> {
   // Filtering
   String _statusFilter = 'all'; // 'all', 'pending', 'completed'
   String _priorityFilter = 'all'; // 'all', 'urgent', 'normal'
+  String _searchQuery = '';
 
   @override
   void initState() {
@@ -54,6 +55,15 @@ class _TasksPageState extends State<TasksPage> {
             (task) => task['isUrgent'] != true && task['priority'] != 'high',
           )
           .toList();
+    }
+
+    final query = _searchQuery.trim().toLowerCase();
+    if (query.isNotEmpty) {
+      filtered = filtered.where((task) {
+        final title = '${task['title'] ?? ''}'.toLowerCase();
+        final subject = '${task['subject'] ?? task['category'] ?? ''}'.toLowerCase();
+        return title.contains(query) || subject.contains(query);
+      }).toList();
     }
 
     return filtered;
@@ -481,6 +491,19 @@ class _TasksPageState extends State<TasksPage> {
                   'ค้างส่ง $_pendingCount รายการ • งานด่วน $_urgentCount รายการ',
             ),
             const SizedBox(height: 16),
+
+            TextField(
+              onChanged: (value) => setState(() => _searchQuery = value),
+              decoration: InputDecoration(
+                hintText: 'ค้นหาชื่องานหรือวิชา',
+                prefixIcon: const Icon(Icons.search_rounded),
+                suffixIcon: _searchQuery.isEmpty ? null : IconButton(
+                  icon: const Icon(Icons.clear_rounded),
+                  onPressed: () => setState(() => _searchQuery = ''),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
 
             // Modern Segmented Filter Bar
             Container(
