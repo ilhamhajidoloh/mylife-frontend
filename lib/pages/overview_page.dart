@@ -3,12 +3,14 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
 import '../widgets/charts.dart';
+import '../widgets/book_selector.dart';
 import '../services/api_client.dart';
 import '../services/api_services.dart';
 import '../services/user_session.dart';
 import '../services/cache_service.dart';
 import '../services/logger.dart';
 import '../services/data_event_service.dart';
+import 'books_management_page.dart';
 
 class OverviewPage extends StatefulWidget {
   const OverviewPage({super.key});
@@ -24,6 +26,9 @@ class _OverviewPageState extends State<OverviewPage>
   double _netBalance = 0.0;
   double _totalIncome = 0.0;
   double _totalExpense = 0.0;
+  List<dynamic> _books = [];
+  String? _selectedBookId;
+  bool _isBooksLoading = true;
 
   Map<String, dynamic>? _todayClasses;
   Map<String, dynamic>? _activityTimeline;
@@ -74,12 +79,14 @@ class _OverviewPageState extends State<OverviewPage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _loadBooks();
     _fetchDashboardData();
     _loadBreakdown();
 
     // ฟังสัญญาณการเปลี่ยนแปลงข้อมูลเพื่ออัพเดตแบบ Real-time ทันที
     _dataSubscription = DataEventService.onDataChanged.listen((_) {
       if (mounted) {
+        _loadBooks();
         _fetchDashboardData(silent: true);
         _loadBreakdown();
       }
@@ -127,13 +134,14 @@ class _OverviewPageState extends State<OverviewPage>
 
   Future<void> _fetchDashboardData({bool silent = false}) async {
     final userId = await UserSession.getUserId();
+    final bookId = _selectedBookId;
+    final isAllBooks = bookId == null;
 
     // 1. โหลดข้อมูลจาก Cache ทันทีเพื่อให้แสดงผลได้ทันทีโดยไม่ต้องรอ API (Stale-While-Revalidate)
     if (!silent) {
-      final cachedFinance = await CacheService.get(
-        userId,
-        CacheService.financeSummary,
-      );
+      final cachedFinance = isAllBooks
+          ? await CacheService.get(userId, CacheService.financeSummary)
+          : null;
       if (cachedFinance != null) {
         _netBalance = (cachedFinance['netBalance'] as num?)?.toDouble() ?? 0.0;
         _totalIncome =
@@ -169,10 +177,9 @@ class _OverviewPageState extends State<OverviewPage>
       );
       if (cachedTasks != null) _urgentTasks = cachedTasks;
 
-      final cachedRecurring = await CacheService.get(
-        userId,
-        CacheService.financeRecurring,
-      );
+      final cachedRecurring = isAllBooks
+          ? await CacheService.get(userId, CacheService.financeRecurring)
+          : null;
       if (cachedRecurring != null && cachedRecurring is List) {
         _recurringExpenses = cachedRecurring;
       }
@@ -188,18 +195,24 @@ class _OverviewPageState extends State<OverviewPage>
     }
 
     try {
-      final financeSummary = await FinanceApiService.getSummary(userId);
+      final financeSummary = await FinanceApiService.getSummary(
+        userId,
+        bookId: bookId,
+      );
       if (financeSummary != null) {
+        if (bookId != _selectedBookId) return;
         _netBalance = (financeSummary['netBalance'] as num?)?.toDouble() ?? 0.0;
         _totalIncome =
             (financeSummary['totalIncome'] as num?)?.toDouble() ?? 0.0;
         _totalExpense =
             (financeSummary['totalExpense'] as num?)?.toDouble() ?? 0.0;
-        await CacheService.save(
-          userId,
-          CacheService.financeSummary,
-          financeSummary,
-        );
+        if (isAllBooks) {
+          await CacheService.save(
+            userId,
+            CacheService.financeSummary,
+            financeSummary,
+          );
+        }
       }
 
       final todayRes = await ScheduleApiService.getTodayClasses(userId);
@@ -236,14 +249,20 @@ class _OverviewPageState extends State<OverviewPage>
         await CacheService.save(userId, CacheService.taskUrgent, _urgentTasks);
       }
 
-      final recurringList = await FinanceApiService.getRecurring(userId);
+      final recurringList = await FinanceApiService.getRecurring(
+        userId,
+        bookId: bookId,
+      );
       if (recurringList != null && recurringList is List) {
+        if (bookId != _selectedBookId) return;
         _recurringExpenses = recurringList;
-        await CacheService.save(
-          userId,
-          CacheService.financeRecurring,
-          _recurringExpenses,
-        );
+        if (isAllBooks) {
+          await CacheService.save(
+            userId,
+            CacheService.financeRecurring,
+            _recurringExpenses,
+          );
+        }
       }
 
       _updateNextEventCountdown();
@@ -263,6 +282,7 @@ class _OverviewPageState extends State<OverviewPage>
         _breakdownPeriod,
         year: _breakdownPeriod == 'yearly' ? null : _breakdownYear,
         month: _breakdownPeriod == 'daily' ? _breakdownMonth : null,
+        bookId: _selectedBookId,
       );
       if (res != null && res['data'] != null && mounted) {
         setState(() => _breakdownData = res['data']);
@@ -272,6 +292,55 @@ class _OverviewPageState extends State<OverviewPage>
     } finally {
       if (mounted) setState(() => _isBreakdownLoading = false);
     }
+  }
+
+  Future<void> _loadBooks() async {
+    if (mounted) setState(() => _isBooksLoading = true);
+    try {
+      final userId = await UserSession.getUserId();
+      if (userId == null) return;
+      final books = await BookApiService.getBooks(userId);
+      if (!mounted) return;
+      setState(() {
+        _books = books is List ? books : [];
+        if (_selectedBookId != null &&
+            !_books.any((book) => book['id']?.toString() == _selectedBookId)) {
+          _selectedBookId = null;
+        }
+        _isBooksLoading = false;
+      });
+    } catch (e, st) {
+      Logger.catchBlock('OverviewPage', 'loadBooks', e, st);
+      if (mounted) setState(() => _isBooksLoading = false);
+    }
+  }
+
+  void _onBookSelected(String? bookId) {
+    if (bookId == _selectedBookId) return;
+    setState(() => _selectedBookId = bookId);
+    _fetchDashboardData(silent: true);
+    _loadBreakdown();
+  }
+
+  void _onManageBooks() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const BooksManagementPage()),
+    ).then((_) async {
+      await _loadBooks();
+      _fetchDashboardData(silent: true);
+      _loadBreakdown();
+    });
+  }
+
+  String get _selectedBookLabel {
+    if (_selectedBookId == null) return 'ทุกบัญชี';
+    final book = _books.cast<dynamic>().firstWhere(
+      (item) => item['id']?.toString() == _selectedBookId,
+      orElse: () => null,
+    );
+    if (book == null) return 'ทุกบัญชี';
+    return '${book['icon'] ?? '📔'} ${book['name'] ?? ''}';
   }
 
   void _changeBreakdownPeriod(String period) {
@@ -443,6 +512,16 @@ class _OverviewPageState extends State<OverviewPage>
             // 1. ZONE 1: Live Focus Spotlight
             _buildLiveFocusSpotlight(c),
             const SizedBox(height: 16),
+
+            if (!_isBooksLoading && _books.isNotEmpty) ...[
+              BookSelector(
+                books: _books,
+                selectedBookId: _selectedBookId,
+                onBookSelected: _onBookSelected,
+                onManageBooks: _onManageBooks,
+              ),
+              const SizedBox(height: 16),
+            ],
 
             // 2. ZONE 2: Today's Bento Grid
             _buildDigitalWalletBento(c),
@@ -1030,7 +1109,7 @@ class _OverviewPageState extends State<OverviewPage>
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      'กระเป๋าหลัก',
+                      _selectedBookLabel,
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.95),
                         fontSize: 11.5,

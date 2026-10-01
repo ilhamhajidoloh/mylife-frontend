@@ -54,11 +54,15 @@ class ApiConfig {
   static String authProfileImageUrl(String userId) =>
       '$baseUrl/api/auth/profile-image/$userId';
 
-  static String finance(String userId) => '$baseUrl/api/finance/$userId';
-  static String financeSummary(String userId) =>
-      '$baseUrl/api/finance/summary/$userId';
-  static String financeRecurring(String userId) =>
-      '$baseUrl/api/finance/recurring/$userId';
+  static String _withBookFilter(String url, String? bookId) =>
+      bookId == null || bookId.isEmpty ? url : '$url?bookId=$bookId';
+
+  static String finance(String userId, {String? bookId}) =>
+      _withBookFilter('$baseUrl/api/finance/$userId', bookId);
+  static String financeSummary(String userId, {String? bookId}) =>
+      _withBookFilter('$baseUrl/api/finance/summary/$userId', bookId);
+  static String financeRecurring(String userId, {String? bookId}) =>
+      _withBookFilter('$baseUrl/api/finance/recurring/$userId', bookId);
   static String get financeRecurringAdd => '$baseUrl/api/finance/recurring';
   static String financeRecurringItem(String id) =>
       '$baseUrl/api/finance/recurring/$id';
@@ -67,18 +71,20 @@ class ApiConfig {
     String period, {
     int? year,
     int? month,
+    String? bookId,
   }) {
     final params = <String, String>{'period': period};
     if (year != null) params['year'] = '$year';
     if (month != null) params['month'] = '$month';
+    if (bookId != null && bookId.isNotEmpty) params['bookId'] = bookId;
     final query = params.entries.map((e) => '${e.key}=${e.value}').join('&');
     return '$baseUrl/api/finance/breakdown/$userId?$query';
   }
 
   // Books API
-  static String books(String userId) => '$baseUrl/api/books/$userId';
-  static String get bookCreate => '$baseUrl/api/books';
-  static String bookItem(String id) => '$baseUrl/api/books/$id';
+  static String books(String userId) => '$baseUrl/api/finance/books/$userId';
+  static String get bookCreate => '$baseUrl/api/finance/books';
+  static String bookItem(String id) => '$baseUrl/api/finance/books/$id';
 
   static String scheduleTerms(String userId) =>
       '$baseUrl/api/schedule/terms/$userId';

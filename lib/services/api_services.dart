@@ -68,12 +68,12 @@ class AuthApiService {
 }
 
 class FinanceApiService {
-  static Future<dynamic> getTransactions(String userId) async {
-    return await ApiClient.get(ApiConfig.finance(userId));
+  static Future<dynamic> getTransactions(String userId, {String? bookId}) async {
+    return await ApiClient.get(ApiConfig.finance(userId, bookId: bookId));
   }
 
-  static Future<dynamic> getSummary(String userId) async {
-    return await ApiClient.get(ApiConfig.financeSummary(userId));
+  static Future<dynamic> getSummary(String userId, {String? bookId}) async {
+    return await ApiClient.get(ApiConfig.financeSummary(userId, bookId: bookId));
   }
 
   static Future<dynamic> addTransaction(
@@ -81,8 +81,9 @@ class FinanceApiService {
     double amount,
     bool isIncome,
     String category,
-    String title,
-  ) async {
+    String title, {
+    String? bookId,
+  }) async {
     return await ApiClient.post('${ApiConfig.baseUrl}/api/finance', {
       'userId': userId,
       'type': isIncome ? 0 : 1,
@@ -90,6 +91,7 @@ class FinanceApiService {
       'category': category,
       'note': title,
       'transactionDate': DateTime.now().toIso8601String(),
+      if (bookId != null) 'bookId': bookId,
     });
   }
 
@@ -101,6 +103,7 @@ class FinanceApiService {
     String category,
     String title, {
     DateTime? transactionDate,
+    String? bookId,
   }) async {
     return await ApiClient.put('${ApiConfig.baseUrl}/api/finance/$id', {
       'id': id,
@@ -110,6 +113,7 @@ class FinanceApiService {
       'category': category,
       'note': title,
       'transactionDate': (transactionDate ?? DateTime.now()).toIso8601String(),
+      if (bookId != null) 'bookId': bookId,
     });
   }
 
@@ -122,14 +126,21 @@ class FinanceApiService {
     String period, {
     int? year,
     int? month,
+    String? bookId,
   }) async {
     return await ApiClient.get(
-      ApiConfig.financeBreakdown(userId, period, year: year, month: month),
+      ApiConfig.financeBreakdown(
+        userId,
+        period,
+        year: year,
+        month: month,
+        bookId: bookId,
+      ),
     );
   }
 
-  static Future<dynamic> getRecurring(String userId) async {
-    return await ApiClient.get(ApiConfig.financeRecurring(userId));
+  static Future<dynamic> getRecurring(String userId, {String? bookId}) async {
+    return await ApiClient.get(ApiConfig.financeRecurring(userId, bookId: bookId));
   }
 
   static Future<dynamic> addRecurring(
@@ -140,8 +151,9 @@ class FinanceApiService {
     DateTime startDate,
     DateTime? endDate,
     bool isIndefinite,
-    int dayOfMonthDue,
-  ) async {
+    int dayOfMonthDue, {
+    String? bookId,
+  }) async {
     return await ApiClient.post(ApiConfig.financeRecurringAdd, {
       'userId': userId,
       'title': title,
@@ -151,6 +163,7 @@ class FinanceApiService {
       'endDate': endDate?.toIso8601String(),
       'isIndefinite': isIndefinite,
       'dayOfMonthDue': dayOfMonthDue,
+      if (bookId != null) 'bookId': bookId,
     });
   }
 
@@ -163,8 +176,9 @@ class FinanceApiService {
     DateTime startDate,
     DateTime? endDate,
     bool isIndefinite,
-    int dayOfMonthDue,
-  ) async {
+    int dayOfMonthDue, {
+    String? bookId,
+  }) async {
     return await ApiClient.put(ApiConfig.financeRecurringItem(id), {
       'id': id,
       'userId': userId,
@@ -175,6 +189,7 @@ class FinanceApiService {
       'endDate': endDate?.toIso8601String(),
       'isIndefinite': isIndefinite,
       'dayOfMonthDue': dayOfMonthDue,
+      if (bookId != null) 'bookId': bookId,
     });
   }
 

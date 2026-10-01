@@ -98,6 +98,7 @@ class _FinancePageState extends State<FinancePage> {
   void _onBookSelected(String? bookId) {
     setState(() => _selectedBookId = bookId);
     _loadFinanceData();
+    _loadRecurring();
     _loadBreakdown();
   }
 
@@ -105,7 +106,16 @@ class _FinancePageState extends State<FinancePage> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const BooksManagementPage()),
-    ).then((_) => _loadBooks());
+    ).then((_) async {
+      await _loadBooks();
+      if (_selectedBookId != null &&
+          !_books.any((book) => book['id']?.toString() == _selectedBookId)) {
+        if (mounted) setState(() => _selectedBookId = null);
+      }
+      _loadFinanceData();
+      _loadRecurring();
+      _loadBreakdown();
+    });
   }
 
   List<dynamic> get _visibleTransactions {
@@ -192,12 +202,13 @@ class _FinancePageState extends State<FinancePage> {
 
   Future<void> _loadFinanceData() async {
     final userId = await UserSession.getUserId();
+    final bookId = _selectedBookId;
+    final isAllBooks = bookId == null;
 
     // 1. อ่านข้อมูลจาก Cache ก่อนทันทีเพื่อการตอบสนองที่รวดเร็ว
-    final cachedSummary = await CacheService.get(
-      userId,
-      CacheService.financeSummary,
-    );
+    final cachedSummary = isAllBooks
+        ? await CacheService.get(userId, CacheService.financeSummary)
+        : null;
     if (cachedSummary != null) {
       _totalIncome = (cachedSummary['totalIncome'] as num?)?.toDouble() ?? 0.0;
       _totalExpense =
@@ -208,7 +219,9 @@ class _FinancePageState extends State<FinancePage> {
       _remainingExpenses = cachedSummary['remainingExpenses'] ?? [];
     }
 
-    final cachedList = await CacheService.get(userId, CacheService.finance);
+    final cachedList = isAllBooks
+        ? await CacheService.get(userId, CacheService.finance)
+        : null;
     if (cachedList != null) _transactions = cachedList;
 
     if (cachedSummary != null || cachedList != null) {
@@ -218,22 +231,26 @@ class _FinancePageState extends State<FinancePage> {
     }
 
     try {
-      final summary = await FinanceApiService.getSummary(userId);
+      final summary = await FinanceApiService.getSummary(userId, bookId: bookId);
       if (summary != null) {
+        if (bookId != _selectedBookId) return;
         _totalIncome = (summary['totalIncome'] as num?)?.toDouble() ?? 0.0;
         _totalExpense = (summary['totalExpense'] as num?)?.toDouble() ?? 0.0;
         _netBalance = (summary['netBalance'] as num?)?.toDouble() ?? 0.0;
         _isLowBalance = summary['isLowBalance'] == true;
         _top5Expenses = summary['top5Expenses'] ?? [];
         _remainingExpenses = summary['remainingExpenses'] ?? [];
-        await CacheService.save(userId, CacheService.financeSummary, summary);
-        await _checkLowBalanceNotification(_isLowBalance);
+        if (isAllBooks) {
+          await CacheService.save(userId, CacheService.financeSummary, summary);
+          await _checkLowBalanceNotification(_isLowBalance);
+        }
       }
 
-      final list = await FinanceApiService.getTransactions(userId);
+      final list = await FinanceApiService.getTransactions(userId, bookId: bookId);
       if (list != null) {
+        if (bookId != _selectedBookId) return;
         _transactions = list;
-        await CacheService.save(userId, CacheService.finance, list);
+        if (isAllBooks) await CacheService.save(userId, CacheService.finance, list);
       }
     } catch (e, st) {
       Logger.catchBlock('FinancePage', 'loadFinanceData', e, st);
@@ -266,18 +283,22 @@ class _FinancePageState extends State<FinancePage> {
 
   Future<void> _loadRecurring() async {
     final userId = await UserSession.getUserId();
+    final bookId = _selectedBookId;
+    final isAllBooks = bookId == null;
 
-    final cached = await CacheService.get(
-      userId,
-      CacheService.financeRecurring,
-    );
+    final cached = isAllBooks
+        ? await CacheService.get(userId, CacheService.financeRecurring)
+        : null;
     if (cached != null && mounted) setState(() => _recurringExpenses = cached);
 
     try {
-      final list = await FinanceApiService.getRecurring(userId);
+      final list = await FinanceApiService.getRecurring(userId, bookId: bookId);
       if (list != null) {
+        if (bookId != _selectedBookId) return;
         if (mounted) setState(() => _recurringExpenses = list);
-        await CacheService.save(userId, CacheService.financeRecurring, list);
+        if (isAllBooks) {
+          await CacheService.save(userId, CacheService.financeRecurring, list);
+        }
       }
     } catch (e, st) {
       Logger.catchBlock('FinancePage', 'loadRecurring', e, st);
@@ -293,6 +314,7 @@ class _FinancePageState extends State<FinancePage> {
         _breakdownPeriod,
         year: _breakdownPeriod == 'yearly' ? null : _breakdownYear,
         month: _breakdownPeriod == 'daily' ? _breakdownMonth : null,
+        bookId: _selectedBookId,
       );
       if (res != null && res['data'] != null && mounted) {
         setState(() => _breakdownData = res['data']);
@@ -350,6 +372,9 @@ class _FinancePageState extends State<FinancePage> {
     bool isIncome = isEdit
         ? _isIncomeType(item?['type'])
         : (initialIsIncome ?? false);
+    String? selectedTransactionBookId = isEdit
+        ? (item == null ? null : item['bookId']?.toString())
+        : _selectedBookId;
 
     showAppBottomSheet(
       context,
@@ -456,6 +481,32 @@ class _FinancePageState extends State<FinancePage> {
                 ),
               ),
               const SizedBox(height: 16),
+
+              if (_books.isNotEmpty) ...[
+                DropdownButtonFormField<String>(
+                  value: _books.any(
+                    (book) => book['id']?.toString() == selectedTransactionBookId,
+                  )
+                      ? selectedTransactionBookId
+                      : null,
+                  decoration: const InputDecoration(
+                    labelText: 'สมุดบัญชี',
+                    prefixIcon: Icon(Icons.menu_book_rounded),
+                  ),
+                  items: _books
+                      .map(
+                        (book) => DropdownMenuItem<String>(
+                          value: book['id']?.toString(),
+                          child: Text('${book['icon'] ?? '📔'} ${book['name'] ?? ''}'),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) => setModalState(
+                    () => selectedTransactionBookId = value,
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
 
               // Category Field
               AppModalField(
@@ -574,6 +625,7 @@ class _FinancePageState extends State<FinancePage> {
                             categoryText,
                             noteText,
                             transactionDate: origDate,
+                            bookId: selectedTransactionBookId,
                           );
                         } else {
                           await FinanceApiService.addTransaction(
@@ -582,6 +634,7 @@ class _FinancePageState extends State<FinancePage> {
                             isIncome,
                             categoryText,
                             noteText,
+                            bookId: selectedTransactionBookId,
                           );
                         }
                         if (context.mounted) Navigator.pop(context);
@@ -761,6 +814,9 @@ class _FinancePageState extends State<FinancePage> {
     DateTime? endDate = isEdit && item['endDate'] != null
         ? DateTime.parse(item['endDate'])
         : null;
+    String? selectedRecurringBookId = isEdit
+        ? (item == null ? null : item['bookId']?.toString())
+        : _selectedBookId;
 
     showAppBottomSheet(
       context,
@@ -775,6 +831,31 @@ class _FinancePageState extends State<FinancePage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (_books.isNotEmpty) ...[
+                DropdownButtonFormField<String>(
+                  value: _books.any(
+                    (book) => book['id']?.toString() == selectedRecurringBookId,
+                  )
+                      ? selectedRecurringBookId
+                      : null,
+                  decoration: const InputDecoration(
+                    labelText: 'สมุดบัญชี',
+                    prefixIcon: Icon(Icons.menu_book_rounded),
+                  ),
+                  items: _books
+                      .map(
+                        (book) => DropdownMenuItem<String>(
+                          value: book['id']?.toString(),
+                          child: Text('${book['icon'] ?? '📔'} ${book['name'] ?? ''}'),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) => setModalState(
+                    () => selectedRecurringBookId = value,
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
               AppModalField(
                 controller: titleController,
                 label: 'ชื่อรายการ เช่น ค่าเน็ต, ค่าเช่าหอ',
@@ -1077,6 +1158,7 @@ class _FinancePageState extends State<FinancePage> {
                               isIndefinite ? null : endDate,
                               isIndefinite,
                               dayOfMonth,
+                              bookId: selectedRecurringBookId,
                             );
                           } else {
                             await FinanceApiService.addRecurring(
@@ -1088,6 +1170,7 @@ class _FinancePageState extends State<FinancePage> {
                               isIndefinite ? null : endDate,
                               isIndefinite,
                               dayOfMonth,
+                              bookId: selectedRecurringBookId,
                             );
                           }
                           if (context.mounted) Navigator.pop(context);
@@ -1350,6 +1433,7 @@ class _FinancePageState extends State<FinancePage> {
         false,
         category,
         'ชำระรายจ่ายประจำ: $title',
+        bookId: item['bookId']?.toString(),
       );
 
       // 2. ขยับไป รายจ่ายประจำ อันถัดไป
@@ -1363,6 +1447,7 @@ class _FinancePageState extends State<FinancePage> {
         endDate,
         isIndefinite,
         dayOfMonthDue,
+        bookId: item['bookId']?.toString(),
       );
 
       _loadFinanceData();
